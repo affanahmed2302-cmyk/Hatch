@@ -29,6 +29,7 @@ export default function HomePage() {
     const [i, p] = await Promise.all([fetchActiveIntents(), fetchPulseFeed()]);
     setIntents(i.data || []);
     setPosts(p.data || []);
+    if (i.error) setErr(i.error);
     setLoading(false);
   }
 
