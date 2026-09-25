@@ -1,40 +1,61 @@
 "use client";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabase, acceptTerms } from "@/lib/supabase";
 
-export default function Terms() {
-  const [ok, setOk] = useState(false);
-  const [loading, setLoading] = useState(false);
+export default function TermsPage() {
+  const [checked, setChecked] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
   const [err, setErr] = useState("");
+  const [userId, setUserId] = useState<string | null>(null);
   const router = useRouter();
 
+  useEffect(() => {
+    (async () => {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) { router.replace("/login"); return; }
+      setUserId(user.id);
+      const { data } = await supabase.from("profiles").select("terms_accepted").eq("id", user.id).maybeSingle();
+      if (data?.terms_accepted) { router.replace("/home"); return; }
+      setLoading(false);
+    })();
+  }, [router]);
+
   async function accept() {
-    setLoading(true);
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) { router.push("/login"); return; }
-    const res = await acceptTerms(user.id);
-    if (!res.ok) { setErr(res.error || "Failed"); setLoading(false); return; }
+    if (!userId || !checked) return;
+    setSaving(true); setErr("");
+    const res = await acceptTerms(userId);
+    setSaving(false);
+    if (!res.ok) { setErr(res.error || "Failed"); return; }
     router.replace("/home");
+  }
+
+  if (loading) {
+    return (
+      <div className="shell" style={{ display: "flex", alignItems: "center", justifyContent: "center" }}>
+        <span className="muted">Loading…</span>
+      </div>
+    );
   }
 
   return (
     <div className="shell" style={{ padding: 24 }}>
-      <div className="logo" style={{ marginBottom: 16 }}>MESH</div>
+      <div className="logo" style={{ marginBottom: 16 }}>HATCH</div>
       <h1 className="h1" style={{ marginBottom: 12 }}>Campus safety gate</h1>
-      <div className="card stack" style={{ marginBottom: 16, maxHeight: 360, overflowY: "auto" }}>
-        <div><strong>1. Real Identity</strong><p className="muted" style={{ fontSize: 13, margin: "4px 0 0" }}>No fake names, burners, or catfishing. Profile must reflect real student identity.</p></div>
-        <div><strong>2. Zero toxicity</strong><p className="muted" style={{ fontSize: 13, margin: "4px 0 0" }}>No bullying, hate, stalking, or non-consensual sharing. Instant ban for violations.</p></div>
-        <div><strong>3. Privacy</strong><p className="muted" style={{ fontSize: 13, margin: "4px 0 0" }}>Messages and status stay within campus network. Delete follows privacy protocol.</p></div>
-        <div><strong>4. Accountability</strong><p className="muted" style={{ fontSize: 13, margin: "4px 0 0" }}>MESH cooperates with college admin if campus safety or law is breached.</p></div>
+      <div className="card" style={{ maxHeight: 320, overflowY: "auto", marginBottom: 16, fontSize: 14, lineHeight: 1.5 }}>
+        <p style={{ marginBottom: 12 }}><strong>1. Real Identity Policy</strong><br />Hatch is exclusively for verified college students. No fake names, burner accounts, or catfishing.</p>
+        <p style={{ marginBottom: 12 }}><strong>2. Zero-Toxicity</strong><br />Zero-tolerance for bullying, hate speech, or stalking. Violators are banned.</p>
+        <p style={{ marginBottom: 12 }}><strong>3. Data & Privacy</strong><br />Messages and team data stay within the campus network.</p>
+        <p><strong>4. Accountability</strong><br />Hatch cooperates with college administration if safety laws are breached.</p>
       </div>
-      {err && <div className="fail" style={{ marginBottom: 12 }}>{err}</div>}
-      <label className="row" style={{ marginBottom: 14, fontSize: 14 }}>
-        <input type="checkbox" checked={ok} onChange={e => setOk(e.target.checked)} style={{ width: 18, height: 18 }} />
-        I have read and accept these terms
+      {err && <div className="fail" style={{ marginBottom: 10 }}>{err}</div>}
+      <label className="row" style={{ marginBottom: 14, gap: 10, cursor: "pointer" }}>
+        <input type="checkbox" checked={checked} onChange={e => setChecked(e.target.checked)} />
+        <span style={{ fontSize: 14 }}>I have read and accept these terms</span>
       </label>
-      <button className="btn" disabled={!ok || loading} onClick={accept} style={{ width: "100%" }}>
-        {loading ? "…" : "Confirm & enter campus"}
+      <button className="btn" style={{ width: "100%" }} disabled={!checked || saving} onClick={accept}>
+        {saving ? "Saving…" : "Confirm & Enter Campus"}
       </button>
     </div>
   );

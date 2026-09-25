@@ -1,59 +1,79 @@
 "use client";
-import Link from "next/link";
 import { useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { supabase, ensureProfile, saveProfile, suggestUsername } from "@/lib/supabase";
+import { supabase, isAllowedCollegeEmail, ensureProfile } from "@/lib/supabase";
 
-export default function Signup() {
-  const [fullName, setFullName] = useState("");
-  const [username, setUsername] = useState("");
+export default function SignupPage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [bio, setBio] = useState("");
+  const [phone, setPhone] = useState("");
+  const [otp, setOtp] = useState("");
+  const [sentOtp, setSentOtp] = useState("");
+  const [step, setStep] = useState<"form" | "otp">("form");
   const [err, setErr] = useState("");
+  const [msg, setMsg] = useState("");
   const [loading, setLoading] = useState(false);
   const router = useRouter();
 
-  async function submit(e: React.FormEvent) {
-    e.preventDefault();
-    setLoading(true); setErr("");
-    const uname = (username || suggestUsername(fullName)).toLowerCase().replace(/[^a-z0-9_]/g, "");
-    if (fullName.trim().length < 2) { setErr("Display name required"); setLoading(false); return; }
-    if (uname.length < 3) { setErr("Username min 3 chars"); setLoading(false); return; }
-    const { data, error } = await supabase.auth.signUp({ email: email.trim(), password });
-    if (error) { setErr(error.message); setLoading(false); return; }
-    if (data.user) {
-      await ensureProfile(data.user.id, data.user.email);
-      const res = await saveProfile(data.user.id, {
-        full_name: fullName.trim(), username: uname, bio: bio.trim() || null,
-        email: data.user.email, college: "BMS",
-      });
-      if (!res.ok) { setErr(res.error || "Profile save failed"); setLoading(false); return; }
+  function startOtp() {
+    setErr("");
+    const domain = isAllowedCollegeEmail(email);
+    if (!domain.ok) { setErr(domain.error || "Invalid email"); return; }
+    if (password.length < 6) { setErr("Password min 6 characters"); return; }
+    const ph = phone.replace(/\D/g, "");
+    if (ph.length < 10) { setErr("Enter a valid 10-digit phone"); return; }
+    const code = String(Math.floor(100000 + Math.random() * 900000));
+    setSentOtp(code);
+    setStep("otp");
+    setMsg(`OTP sent (demo): ${code}`);
+  }
+
+  async function finishSignup() {
+    setErr(""); setLoading(true);
+    try {
+      if (otp !== sentOtp) { setErr("Wrong OTP"); setLoading(false); return; }
+      const { data, error } = await supabase.auth.signUp({ email: email.trim().toLowerCase(), password });
+      if (error) { setErr(error.message); setLoading(false); return; }
+      const uid = data.user?.id;
+      if (uid) {
+        await ensureProfile(uid, email.trim().toLowerCase());
+        await supabase.from("profiles").update({
+          phone: phone.replace(/\D/g, "").slice(-10),
+          phone_verified: true,
+          college: "BMS",
+        }).eq("id", uid);
+      }
       router.replace("/terms");
+    } catch (e: any) {
+      setErr(e?.message || "Signup failed");
     }
+    setLoading(false);
   }
 
   return (
-    <div className="shell" style={{ padding: 24 }}>
-      <div className="logo" style={{ marginBottom: 24 }}>MESH</div>
-      <h1 className="h1" style={{ marginBottom: 20 }}>Join MESH</h1>
-      {err && <div className="fail" style={{ marginBottom: 12 }}>{err}</div>}
-      <form className="stack" onSubmit={submit}>
-        <div>
-          <span className="label">Display name *</span>
-          <input value={fullName} onChange={e => setFullName(e.target.value)} required placeholder="Your real name" />
+    <div className="shell" style={{ padding: 24, display: "flex", flexDirection: "column", justifyContent: "center", minHeight: "100dvh" }}>
+      <div className="logo" style={{ marginBottom: 20 }}>HATCH</div>
+      <h1 className="h1" style={{ marginBottom: 8 }}>Join campus</h1>
+      <p className="muted" style={{ fontSize: 13, marginBottom: 16 }}>BMS institutional email required</p>
+      {err && <div className="fail" style={{ marginBottom: 10 }}>{err}</div>}
+      {msg && <div className="ok" style={{ marginBottom: 10 }}>{msg}</div>}
+      {step === "form" ? (
+        <div className="stack">
+          <input type="email" placeholder="you@bmsce.ac.in" value={email} onChange={e => setEmail(e.target.value)} />
+          <input type="password" placeholder="Password (min 6)" value={password} onChange={e => setPassword(e.target.value)} />
+          <input type="tel" placeholder="Phone (OTP)" value={phone} onChange={e => setPhone(e.target.value)} />
+          <button className="btn" onClick={startOtp}>Continue</button>
         </div>
-        <div>
-          <span className="label">Username * (unique)</span>
-          <input value={username} onChange={e => setUsername(e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, ""))} placeholder="like_instagram" />
+      ) : (
+        <div className="stack">
+          <input inputMode="numeric" placeholder="Enter OTP" value={otp} onChange={e => setOtp(e.target.value)} />
+          <button className="btn" onClick={finishSignup} disabled={loading}>{loading ? "Creating…" : "Verify & create"}</button>
+          <button className="btn-ghost" onClick={() => setStep("form")}>Back</button>
         </div>
-        <input type="email" placeholder="Email *" value={email} onChange={e => setEmail(e.target.value)} required />
-        <input type="password" placeholder="Password * (min 6)" value={password} onChange={e => setPassword(e.target.value)} required minLength={6} />
-        <textarea placeholder="Bio / interests (optional)" value={bio} onChange={e => setBio(e.target.value)} rows={2} />
-        <button className="btn" type="submit" disabled={loading}>{loading ? "…" : "Create account"}</button>
-      </form>
-      <p className="muted" style={{ marginTop: 16, fontSize: 14 }}>
-        Have an account? <Link href="/login" style={{ color: "var(--accent)" }}>Log in</Link>
+      )}
+      <p className="muted" style={{ marginTop: 16, fontSize: 13 }}>
+        Have an account? <Link href="/login">Log in</Link>
       </p>
     </div>
   );
