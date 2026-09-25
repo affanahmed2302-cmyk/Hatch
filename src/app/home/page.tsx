@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { supabase, needsTermsAcceptance, postPulse, fetchPulseFeed, displayName } from "@/lib/supabase";
 import { broadcastIntent, fetchActiveIntents, clearMyIntent, type LiveIntent } from "@/lib/intents";
+import { ZONES, getTodayVibe, setTodayVibe } from "@/lib/vibe";
 import Nav from "@/components/Nav";
 
 const LOCATIONS = ["Campus", "Canteen", "Library", "Lab", "Hostel", "Quad", "Turf"];
@@ -19,6 +20,7 @@ export default function HomePage() {
   const [err, setErr] = useState("");
   const [loading, setLoading] = useState(true);
   const [tab, setTab] = useState<"radar" | "pulse">("radar");
+  const [vibe, setVibe] = useState<string | null>(null);
   const router = useRouter();
 
   async function refresh(uid: string) {
@@ -38,6 +40,8 @@ export default function HomePage() {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) { router.push("/login"); return; }
       setMyId(user.id);
+      const v = await getTodayVibe(user.id);
+      if (v.data?.zone) setVibe(v.data.zone);
       await refresh(user.id);
     })();
   }, [router]);
@@ -97,6 +101,34 @@ export default function HomePage() {
         {msg && <div className="ok" style={{ marginBottom: 8 }}>{msg}</div>}
         {err && <div className="fail" style={{ marginBottom: 8 }}>{err}</div>}
 
+        <div className="card" style={{ marginBottom: 14 }}>
+          <div style={{ fontWeight: 600, fontSize: 14, marginBottom: 8 }}>Today&apos;s vibe check</div>
+          {vibe ? (
+            <p className="muted" style={{ fontSize: 13 }}>You&apos;re around <strong style={{ color: "var(--text)" }}>{vibe}</strong> today</p>
+          ) : (
+            <>
+              <p className="muted" style={{ fontSize: 12, marginBottom: 8 }}>Where will you hang on campus?</p>
+              <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+                {ZONES.map((z) => (
+                  <button
+                    key={z}
+                    type="button"
+                    className="chip"
+                    onClick={async () => {
+                      if (!myId) return;
+                      const res = await setTodayVibe(myId, z);
+                      if (res.ok) { setVibe(z); setMsg("Vibe set · see you around"); }
+                      else setErr(res.error || "Failed");
+                    }}
+                  >
+                    {z}
+                  </button>
+                ))}
+              </div>
+            </>
+          )}
+        </div>
+
         <div className="row" style={{ gap: 8, marginBottom: 14 }}>
           <button className={`chip ${tab === "radar" ? "on" : ""}`} onClick={() => setTab("radar")}>Quad Radar</button>
           <button className={`chip ${tab === "pulse" ? "on" : ""}`} onClick={() => setTab("pulse")}>Pulse</button>
@@ -114,9 +146,7 @@ export default function HomePage() {
               />
               <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
                 {LOCATIONS.map((l) => (
-                  <button key={l} type="button" className={`chip ${loc === l ? "on" : ""}`} onClick={() => setLoc(l)}>
-                    {l}
-                  </button>
+                  <button key={l} type="button" className={`chip ${loc === l ? "on" : ""}`} onClick={() => setLoc(l)}>{l}</button>
                 ))}
               </div>
               <div className="row" style={{ gap: 8 }}>
@@ -148,13 +178,7 @@ export default function HomePage() {
         {tab === "pulse" && (
           <>
             <div className="card stack" style={{ marginBottom: 14 }}>
-              <textarea
-                placeholder="Anonymous campus note (6h)"
-                value={pulseText}
-                onChange={(e) => setPulseText(e.target.value)}
-                rows={2}
-                maxLength={280}
-              />
+              <textarea placeholder="Anonymous campus note (6h)" value={pulseText} onChange={(e) => setPulseText(e.target.value)} rows={2} maxLength={280} />
               <button className="btn btn-sm" onClick={publishPulse} disabled={!pulseText.trim()}>Post pulse</button>
             </div>
             {posts.map((p) => (
