@@ -40,12 +40,36 @@ export async function requestJoinTeam(teamId: string, userId: string) {
 
 export async function acceptRequest(requestId: string, adminId: string) {
   try {
-    const { data, error } = await supabase.rpc('accept_team_request', {
+    const rpc = await supabase.rpc('accept_team_request', {
       p_request_id: requestId,
       p_admin_id: adminId,
     })
-    if (error) return { ok: false as const, error: error.message }
-    if (data && data.ok === false) return { ok: false as const, error: data.error || 'Failed' }
+    if (!rpc.error && rpc.data && rpc.data.ok !== false) {
+      return { ok: true as const, error: null }
+    }
+
+    const { data: req, error: re } = await supabase
+      .from('team_requests')
+      .select('id, team_id, user_id, status')
+      .eq('id', requestId)
+      .eq('status', 'pending')
+      .maybeSingle()
+    if (re || !req) return { ok: false as const, error: re?.message || 'Request not found' }
+
+    const { count } = await supabase
+      .from('team_members')
+      .select('*', { count: 'exact', head: true })
+      .eq('team_id', req.team_id)
+    if ((count || 0) >= 4) return { ok: false as const, error: 'Team full (max 4)' }
+
+    const { error: me } = await supabase.from('team_members').insert({
+      team_id: req.team_id,
+      user_id: req.user_id,
+      role: 'member',
+    })
+    if (me && me.code !== '23505') return { ok: false as const, error: me.message }
+
+    await supabase.from('team_requests').update({ status: 'accepted' }).eq('id', requestId)
     return { ok: true as const, error: null }
   } catch (e: any) {
     return { ok: false as const, error: e?.message || 'Accept failed' }
@@ -89,13 +113,4 @@ export async function getTeamMemberCount(teamId: string) {
     .select('*', { count: 'exact', head: true })
     .eq('team_id', teamId)
   return count || 0
-}
-
-export async function listPendingRequests(teamId: string) {
-  const { data } = await supabase
-    .from('team_requests')
-    .select('id, user_id, status, created_at, profiles:user_id(full_name, username)')
-    .eq('team_id', teamId)
-    .eq('status', 'pending')
-  return data || []
 }
