@@ -55,7 +55,7 @@ export default function ProfilePage() {
         full_name: fullName.trim(),
         username: username.trim().toLowerCase(),
         bio: bio.trim() || null,
-        department: department.trim() || null,
+        department: department || null,
         year: year || null,
         github_handle: github.trim().replace(/^@/, "") || null,
         leetcode_handle: leetcode.trim() || null,
@@ -86,7 +86,10 @@ export default function ProfilePage() {
     <div className="shell">
       <div className="topbar">
         <div className="logo">HATCH</div>
-        <Link href="/settings" className="btn-ghost btn-sm" style={{ marginLeft: "auto" }}>Settings</Link>
+        <div className="row" style={{ marginLeft: "auto", gap: 8 }}>
+          <Link href="/perks" className="btn-ghost btn-sm">Perks</Link>
+          <Link href="/settings" className="btn-ghost btn-sm">Settings</Link>
+        </div>
       </div>
       <div className="page">
         <h1 className="h1" style={{ marginBottom: 4 }}>Your profile</h1>
@@ -108,7 +111,20 @@ export default function ProfilePage() {
           </div>
           <div>
             <span className="label">Department</span>
-            <input value={department} onChange={e => setDepartment(e.target.value)} placeholder="CSE / ISE / ECE…" />
+            <select value={department} onChange={e => setDepartment(e.target.value)}>
+              <option value="">Select department</option>
+              <option value="CSE">CSE</option>
+              <option value="ISE">ISE</option>
+              <option value="ECE">ECE</option>
+              <option value="EEE">EEE</option>
+              <option value="ME">ME</option>
+              <option value="CV">Civil</option>
+              <option value="AE">Aerospace</option>
+              <option value="BT">Biotechnology</option>
+              <option value="AIML">AI & ML</option>
+              <option value="AIDS">AI & DS</option>
+              <option value="Other">Other</option>
+            </select>
           </div>
           <div>
             <span className="label">Year</span>
