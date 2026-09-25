@@ -1,16 +1,17 @@
-# MESH — BMS Campus Network
+# hatch
 
-Next.js 15 + Supabase PWA for BMS students.
+BMS campus network — find teammates, ship projects.
 
-## Stack
-- Next.js App Router
-- Tailwind CSS v4
-- Supabase Auth + Realtime
-- Multi-color dopamine UI
+**Live:** https://hatch-primeora.vercel.app
 
-## Deploy
-Connect this repo to Vercel with **Root Directory** = repo root (not mesh-phase1).
+Stack: Next.js · Supabase · Vercel
 
-```bash
-npm i && npm run build
-```
+## Setup
+
+1. Clone this repo
+2. `npm install && npm run dev`
+3. Run `supabase_hatch_migration.sql` in Supabase SQL Editor once
+
+## Routes
+
+- `/home` Live · `/discover` Match · `/teams` · `/clubs` · `/inbox` · `/profile` · `/settings` · `/perks`
