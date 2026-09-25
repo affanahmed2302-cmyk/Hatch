@@ -56,6 +56,16 @@ export function yearToNumber(y: string | number | null | undefined): number | nu
   return Number.isFinite(n) ? n : null
 }
 
+export function yearToLabel(y: string | number | null | undefined): string {
+  if (y == null || y === '') return ''
+  const n = typeof y === 'number' ? y : parseInt(String(y), 10)
+  if (n === 1) return '1st year'
+  if (n === 2) return '2nd year'
+  if (n === 3) return '3rd year'
+  if (n === 4) return '4th year'
+  return String(y)
+}
+
 export async function saveProfile(userId: string, fields: Record<string, unknown>) {
   try {
     const { year, full_name, username, ...rest } = fields as any
