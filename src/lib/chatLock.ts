@@ -1,9 +1,9 @@
-const PIN_KEY = 'mesh_chat_lock_pin'
-const UNLOCK_KEY = 'mesh_chat_session_unlocked'
-const LOCKED_CHATS_KEY = 'mesh_locked_chat_ids'
-const WALLPAPER_KEY = 'mesh_chat_wallpaper'
-const DELETED_FOR_ME_KEY = 'mesh_deleted_for_me'
-const NOTIFY_KEY = 'mesh_daily_reminders'
+const PIN_KEY = 'hatch_chat_lock_pin'
+const UNLOCK_KEY = 'hatch_chat_session_unlocked'
+const LOCKED_CHATS_KEY = 'hatch_locked_chat_ids'
+const WALLPAPER_KEY = 'hatch_chat_wallpaper'
+const DELETED_FOR_ME_KEY = 'hatch_deleted_for_me'
+const NOTIFY_KEY = 'hatch_daily_reminders'
 
 /** True only when user has set a PIN (lock feature ON). */
 export function hasChatLock() {
