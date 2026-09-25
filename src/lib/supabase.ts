@@ -16,10 +16,12 @@ export function isAllowedCollegeEmail(email: string): { ok: boolean; error?: str
   const e = (email || '').trim().toLowerCase()
   if (!e || !e.includes('@')) return { ok: false, error: 'Enter a valid email' }
   const domain = e.split('@')[1] || ''
-  const hasBms = domain.includes('bms') || e.includes('bms')
-  const okTld = domain.endsWith('.ac.in') || domain.endsWith('.edu') || domain.endsWith('.edu.in') || domain.endsWith('.in')
-  if (!hasBms) return { ok: false, error: 'Use your BMS institutional email (must contain bms)' }
-  if (!okTld) return { ok: false, error: 'Email must end with .ac.in, .edu, or .in' }
+  const blocked = ['gmail.com','googlemail.com','yahoo.com','yahoo.co.in','outlook.com','hotmail.com','live.com','icloud.com','proton.me','protonmail.com','aol.com','mail.com','yandex.com','zoho.com']
+  if (blocked.includes(domain)) return { ok: false, error: 'Public emails blocked — use BMS institutional email' }
+  const hasBms = domain.includes('bms')
+  const okTld = domain.endsWith('.ac.in') || domain.endsWith('.edu') || domain.endsWith('.edu.in') || (domain.includes('bms') && domain.endsWith('.in'))
+  if (!hasBms) return { ok: false, error: 'Use your BMS institutional email (domain must contain bms)' }
+  if (!okTld) return { ok: false, error: 'Email must end with .ac.in, .edu, or college .in' }
   return { ok: true }
 }
 
