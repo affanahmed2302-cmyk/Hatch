@@ -3,10 +3,10 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 
 const items = [
-  { href: "/home", label: "Pulse", icon: "•" },
+  { href: "/home", label: "Live", icon: "•" },
   { href: "/discover", label: "Match", icon: "◎" },
   { href: "/teams", label: "Teams", icon: "△" },
-  { href: "/clubs", label: "Clubs", icon: "✦" },
+  { href: "/perks", label: "Perks", icon: "★" },
   { href: "/inbox", label: "Inbox", icon: "◇" },
   { href: "/profile", label: "You", icon: "●" },
 ];
