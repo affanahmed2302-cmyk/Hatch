@@ -17,6 +17,7 @@ export default function TeamsPage() {
   const [selected, setSelected] = useState<string | null>(null);
   const [requests, setRequests] = useState<any[]>([]);
   const [members, setMembers] = useState<any[]>([]);
+  const [adminTeamIds, setAdminTeamIds] = useState<Set<string>>(new Set());
   const router = useRouter();
 
   async function load() {
@@ -26,8 +27,15 @@ export default function TeamsPage() {
     const { data } = await supabase.from("teams").select("*").order("created_at", { ascending: false }).limit(40);
     setTeams(data || []);
     const map: Record<string, number> = {};
-    for (const t of data || []) map[t.id] = await getTeamMemberCount(t.id);
+    for (const t of data || []) {
+      map[t.id] = await getTeamMemberCount(t.id);
+    }
     setCounts(map);
+    const { data: myMem } = await supabase.from("team_members").select("team_id, role").eq("user_id", user.id);
+    const admins = new Set<string>();
+    (myMem || []).forEach((m: any) => { if (m.role === "admin") admins.add(m.team_id); });
+    (data || []).forEach((t: any) => { if (t.owner_id === user.id || t.leader_id === user.id) admins.add(t.id); });
+    setAdminTeamIds(admins);
   }
   useEffect(() => { load(); }, []);
 
@@ -51,7 +59,11 @@ export default function TeamsPage() {
   async function openManage(teamId: string) {
     setSelected(teamId);
     setTab("manage");
-    const { data: reqs } = await supabase.from("team_requests").select("id, user_id, status, created_at").eq("team_id", teamId).eq("status", "pending");
+    const { data: reqs } = await supabase
+      .from("team_requests")
+      .select("id, user_id, status, created_at")
+      .eq("team_id", teamId)
+      .eq("status", "pending");
     const uids = (reqs || []).map((r: any) => r.user_id);
     let profiles: any[] = [];
     if (uids.length) {
@@ -61,6 +73,7 @@ export default function TeamsPage() {
     const pmap: Record<string, any> = {};
     profiles.forEach(p => { pmap[p.id] = p; });
     setRequests((reqs || []).map((r: any) => ({ ...r, profile: pmap[r.user_id] })));
+
     const { data: mems } = await supabase.from("team_members").select("user_id, role").eq("team_id", teamId);
     const mids = (mems || []).map((m: any) => m.user_id);
     let mprofiles: any[] = [];
@@ -113,7 +126,7 @@ export default function TeamsPage() {
               <button className="btn btn-sm" onClick={create} disabled={!name.trim()}>Create team (max 4)</button>
             </div>
             {teams.map(t => {
-              const isOwner = t.owner_id === myId || t.leader_id === myId;
+              const isOwner = adminTeamIds.has(t.id) || t.owner_id === myId || t.leader_id === myId;
               const full = (counts[t.id] || 0) >= 4;
               return (
                 <div key={t.id} className="card" style={{ marginBottom: 10 }}>
