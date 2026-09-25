@@ -3,7 +3,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 
 const items = [
-  { href: "/home", label: "Pulse", icon: "⚡" },
+  { href: "/home", label: "Pulse", icon: "•" },
   { href: "/discover", label: "Match", icon: "◎" },
   { href: "/teams", label: "Teams", icon: "△" },
   { href: "/clubs", label: "Clubs", icon: "✦" },

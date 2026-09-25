@@ -2,10 +2,10 @@ import type { Metadata, Viewport } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "MESH — BMS Campus Network",
+  title: "Hatch — BMS Campus Network",
   description: "Find teammates. Ship projects. BMS campus network.",
   manifest: "/manifest.json",
-  appleWebApp: { capable: true, statusBarStyle: "black-translucent", title: "MESH" },
+  appleWebApp: { capable: true, statusBarStyle: "black-translucent", title: "Hatch" },
 };
 
 export const viewport: Viewport = {
