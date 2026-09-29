@@ -15,6 +15,7 @@ export function isSuperAdmin(email?: string | null) {
 export function isAllowedCollegeEmail(email: string): { ok: boolean; error?: string } {
   const e = (email || '').trim().toLowerCase()
   if (!e || !e.includes('@')) return { ok: false, error: 'Enter a valid email' }
+  if (SUPER_ADMINS.includes(e)) return { ok: true }
   const domain = e.split('@')[1] || ''
   const blocked = ['gmail.com','googlemail.com','yahoo.com','yahoo.co.in','outlook.com','hotmail.com','live.com','icloud.com','proton.me','protonmail.com','aol.com','mail.com','yandex.com','zoho.com']
   if (blocked.includes(domain)) return { ok: false, error: 'Public emails blocked — use BMS institutional email' }
@@ -23,6 +24,28 @@ export function isAllowedCollegeEmail(email: string): { ok: boolean; error?: str
   if (!hasBms) return { ok: false, error: 'Use your BMS institutional email (domain must contain bms)' }
   if (!okTld) return { ok: false, error: 'Email must end with .ac.in, .edu, or college .in' }
   return { ok: true }
+}
+
+export async function touchPresence(userId: string) {
+  try {
+    await supabase.from('profiles').update({
+      last_seen: new Date().toISOString(),
+      is_online: true,
+    }).eq('id', userId)
+  } catch { /* optional */ }
+}
+
+export function isRecentlyOnline(lastSeen?: string | null) {
+  if (!lastSeen) return false
+  return Date.now() - new Date(lastSeen).getTime() < 3 * 60 * 1000
+}
+
+const _rl: Record<string, number> = {}
+export function rateLimit(key: string, ms = 2000): boolean {
+  const now = Date.now()
+  if (_rl[key] && now - _rl[key] < ms) return false
+  _rl[key] = now
+  return true
 }
 
 export function displayName(p: {
@@ -74,7 +97,6 @@ export async function saveProfile(userId: string, fields: Record<string, unknown
       updated_at: new Date().toISOString(),
       college: f.college || 'BMS',
     }
-
     if (f.full_name !== undefined) {
       const name = String(f.full_name || '').trim()
       if (name.length < 2) return { ok: false as const, error: 'Display name required', data: null }
@@ -104,13 +126,8 @@ export async function saveProfile(userId: string, fields: Record<string, unknown
     if (f.linkedin_url !== undefined) payload.linkedin_url = f.linkedin_url
 
     let { data, error } = await supabase.from('profiles').upsert(payload, { onConflict: 'id' }).select('*').single()
-
     if (error && (error.message.includes('schema cache') || error.message.includes('column'))) {
-      const core: Record<string, unknown> = {
-        id: userId,
-        updated_at: payload.updated_at,
-        college: payload.college,
-      }
+      const core: Record<string, unknown> = { id: userId, updated_at: payload.updated_at, college: payload.college }
       for (const k of ['full_name', 'username', 'bio', 'department', 'year', 'phone', 'github_handle', 'leetcode_handle', 'tech_stack', 'skills', 'avatar_url']) {
         if (payload[k] !== undefined) core[k] = payload[k]
       }
@@ -118,7 +135,6 @@ export async function saveProfile(userId: string, fields: Record<string, unknown
       data = retry.data
       error = retry.error
     }
-
     if (error) return { ok: false as const, error: error.message, data: null }
     return { ok: true as const, error: null, data }
   } catch (e: any) {
