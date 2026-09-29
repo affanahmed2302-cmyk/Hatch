@@ -17,7 +17,7 @@ export default function TermsPage() {
       if (!user) { router.replace("/login"); return; }
       setUserId(user.id);
       const { data } = await supabase.from("profiles").select("terms_accepted").eq("id", user.id).maybeSingle();
-      if (data?.terms_accepted) { router.replace("/home"); return; }
+      if (data?.terms_accepted) { router.replace("/onboarding"); return; }
       setLoading(false);
     })();
   }, [router]);
@@ -28,13 +28,13 @@ export default function TermsPage() {
     const res = await acceptTerms(userId);
     setSaving(false);
     if (!res.ok) { setErr(res.error || "Failed"); return; }
-    router.replace("/home");
+    router.replace("/onboarding");
   }
 
   if (loading) {
     return (
       <div className="shell" style={{ display: "flex", alignItems: "center", justifyContent: "center" }}>
-        <span className="muted">Loading…</span>
+        <span className="muted">Loading...</span>
       </div>
     );
   }
@@ -44,9 +44,9 @@ export default function TermsPage() {
       <div className="logo" style={{ marginBottom: 16 }}>HATCH</div>
       <h1 className="h1" style={{ marginBottom: 12 }}>Campus safety gate</h1>
       <div className="card" style={{ maxHeight: 320, overflowY: "auto", marginBottom: 16, fontSize: 14, lineHeight: 1.5 }}>
-        <p style={{ marginBottom: 12 }}><strong>1. Real Identity Policy</strong><br />Hatch is exclusively for verified college students. No fake names, burner accounts, or catfishing.</p>
+        <p style={{ marginBottom: 12 }}><strong>1. Real Identity Policy</strong><br />Hatch is exclusively for verified college students. No fake names, burner accounts, or catfishing. Full-face photo required.</p>
         <p style={{ marginBottom: 12 }}><strong>2. Zero-Toxicity</strong><br />Zero-tolerance for bullying, hate speech, or stalking. Violators are banned.</p>
-        <p style={{ marginBottom: 12 }}><strong>3. Data & Privacy</strong><br />Messages and team data stay within the campus network.</p>
+        <p style={{ marginBottom: 12 }}><strong>3. Data and Privacy</strong><br />Messages and team data stay within the campus network.</p>
         <p><strong>4. Accountability</strong><br />Hatch cooperates with college administration if safety laws are breached.</p>
       </div>
       {err && <div className="fail" style={{ marginBottom: 10 }}>{err}</div>}
@@ -55,7 +55,7 @@ export default function TermsPage() {
         <span style={{ fontSize: 14 }}>I have read and accept these terms</span>
       </label>
       <button className="btn" style={{ width: "100%" }} disabled={!checked || saving} onClick={accept}>
-        {saving ? "Saving…" : "Confirm & Enter Campus"}
+        {saving ? "Saving..." : "Confirm and continue"}
       </button>
     </div>
   );
