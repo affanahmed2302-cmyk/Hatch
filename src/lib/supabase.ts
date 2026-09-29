@@ -125,6 +125,21 @@ export async function acceptTerms(userId: string) {
   }
 }
 
+export async function isProfileComplete(userId: string): Promise<{ ok: boolean; missing: string[] }> {
+  try {
+    const { data } = await supabase.from('profiles').select('full_name, bio, avatar_url, username, terms_accepted').eq('id', userId).maybeSingle()
+    const missing: string[] = []
+    if (!data?.terms_accepted) missing.push('terms')
+    if (!data?.full_name || String(data.full_name).trim().length < 2) missing.push('name')
+    if (!data?.username || String(data.username).trim().length < 3) missing.push('username')
+    if (!data?.bio || String(data.bio).trim().length < 20) missing.push('bio')
+    if (!data?.avatar_url) missing.push('photo')
+    return { ok: missing.length === 0, missing }
+  } catch {
+    return { ok: false, missing: ['profile'] }
+  }
+}
+
 export function jitsiRoom(kind: 'dm' | 'team', id: string) {
   const clean = id.replace(/[^a-zA-Z0-9]/g, '').toLowerCase().slice(0, 24)
   return `hatch${kind}${clean}`
@@ -151,7 +166,7 @@ export function jitsiEmbedUrl(room: string, audioOnly = false, displayName = 'Ha
 export async function postPulse(userId: string, content: string, category = 'general', isAnonymous = true) {
   try {
     const text = content.trim()
-    if (!text || text.length > 280) return { ok: false as const, error: '1–280 characters' }
+    if (!text || text.length > 280) return { ok: false as const, error: '1-280 characters' }
     const { data, error } = await supabase.from('pulse_posts').insert({
       author_id: userId, content: text, category, is_anonymous: isAnonymous,
       expires_at: new Date(Date.now() + 6 * 60 * 60 * 1000).toISOString(),
