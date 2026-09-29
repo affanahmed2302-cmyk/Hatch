@@ -55,3 +55,19 @@ export async function endCall(callId: string) {
 export function callEmbedUrl(call: CallRow, myName: string) {
   return jitsiEmbedUrl(call.room_id, call.call_type === 'audio', myName)
 }
+
+export async function fetchActiveIncoming(userId: string) {
+  try {
+    const { data } = await supabase
+      .from('calls')
+      .select('*')
+      .eq('callee_id', userId)
+      .eq('status', 'ringing')
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle()
+    return (data as CallRow) || null
+  } catch {
+    return null
+  }
+}
