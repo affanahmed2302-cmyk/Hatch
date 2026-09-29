@@ -8,7 +8,7 @@ import { startCall, endCall, respondCall, callEmbedUrl, type CallRow } from "@/l
 import {
   haptic, playPing, bumpChatStreak, getChatStreak, markMessagesRead, bumpDaily,
 } from "@/lib/obsession";
-import { blockUser } from "@/lib/safety";
+import { blockUser, reportUser } from "@/lib/safety";
 
 export default function ChatPage() {
   const { id: peerId } = useParams<{ id: string }>();
@@ -28,6 +28,7 @@ export default function ChatPage() {
   const [streak, setStreak] = useState(0);
   const [peerTyping, setPeerTyping] = useState(false);
   const [recording, setRecording] = useState(false);
+  const [menuOpen, setMenuOpen] = useState(false);
   const mediaRec = useRef<MediaRecorder | null>(null);
   const chunks = useRef<Blob[]>([]);
   const bottom = useRef<HTMLDivElement>(null);
@@ -56,7 +57,7 @@ export default function ChatPage() {
   async function loadMsgs(uid: string) {
     const { data } = await supabase.from("messages").select("*")
       .or(`and(sender_id.eq.${uid},receiver_id.eq.${peerId}),and(sender_id.eq.${peerId},receiver_id.eq.${uid})`)
-      .order("created_at", { ascending: true }).limit(120);
+      .order("created_at", { ascending: true }).limit(200);
     setMsgs(data || []);
     setTimeout(() => bottom.current?.scrollIntoView({ behavior: "smooth" }), 50);
   }
@@ -147,10 +148,7 @@ export default function ChatPage() {
         }
         const { data: pub } = supabase.storage.from("chat-media").getPublicUrl(path);
         await supabase.from("messages").insert({
-          sender_id: myId,
-          receiver_id: peerId,
-          content: "🎤 Voice note",
-          media_url: pub.publicUrl,
+          sender_id: myId, receiver_id: peerId, content: "🎤 Voice note", media_url: pub.publicUrl,
         });
         setStreak(await bumpChatStreak(myId, peerId));
         haptic(12);
@@ -209,9 +207,16 @@ export default function ChatPage() {
 
   async function doBlock() {
     if (!myId) return;
-    if (!confirm("Block this user?")) return;
+    if (!confirm("Block this person?")) return;
     await blockUser(myId, peerId);
     router.push("/inbox");
+  }
+
+  async function doReport() {
+    if (!myId) return;
+    await reportUser(myId, peerId, "inappropriate");
+    setCallErr("Report submitted");
+    setMenuOpen(false);
   }
 
   if (needPin) {
@@ -270,19 +275,39 @@ export default function ChatPage() {
         </div>
       )}
 
-      <div className="topbar">
+      <div className="topbar" style={{ gap: 8 }}>
         <Link href="/inbox" className="btn-ghost btn-sm">←</Link>
-        <div style={{ flex: 1, marginLeft: 8 }}>
-          <div className="h2">{displayName(peer || {})}</div>
-          {peerTyping ? (
-            <span className="muted" style={{ fontSize: 11 }}>typing…</span>
-          ) : streak > 0 ? (
-            <span className="muted" style={{ fontSize: 11 }}>🔥 {streak} day streak</span>
-          ) : null}
-        </div>
+        <Link href={"/u/" + peerId} style={{ display: "flex", alignItems: "center", gap: 10, flex: 1, minWidth: 0, textDecoration: "none", color: "inherit" }}>
+          <div style={{
+            width: 36, height: 36, borderRadius: "50%", flexShrink: 0,
+            background: peer?.avatar_url ? `url(${peer.avatar_url}) center/cover` : "var(--grad-cool)",
+          }} />
+          <div style={{ minWidth: 0 }}>
+            <div className="h2" style={{ fontSize: 15, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{displayName(peer || {})}</div>
+            {peerTyping ? (
+              <span className="muted" style={{ fontSize: 11 }}>typing…</span>
+            ) : streak > 0 ? (
+              <span className="muted" style={{ fontSize: 11 }}>🔥 {streak} day streak</span>
+            ) : (
+              <span className="muted" style={{ fontSize: 11 }}>View profile</span>
+            )}
+          </div>
+        </Link>
         <button className="btn-ghost btn-sm" onClick={() => ring(true)}>Audio</button>
         <button className="btn-ghost btn-sm" onClick={() => ring(false)}>Video</button>
-        <button className="btn-ghost btn-sm" style={{ color: "#f43f5e" }} onClick={doBlock}>Block</button>
+        <div style={{ position: "relative" }}>
+          <button className="btn-ghost btn-sm" onClick={() => setMenuOpen(!menuOpen)} aria-label="More">···</button>
+          {menuOpen && (
+            <div className="card" style={{
+              position: "absolute", right: 0, top: 36, zIndex: 60, minWidth: 170, padding: 8,
+              boxShadow: "0 12px 40px rgba(0,0,0,0.5)",
+            }}>
+              <Link href={"/u/" + peerId} className="btn-ghost btn-sm" style={{ display: "block", textAlign: "left", width: "100%" }} onClick={() => setMenuOpen(false)}>View profile</Link>
+              <button className="btn-ghost btn-sm" style={{ display: "block", width: "100%", textAlign: "left" }} onClick={doReport}>Report</button>
+              <button className="btn-ghost btn-sm" style={{ display: "block", width: "100%", textAlign: "left", color: "#f43f5e" }} onClick={doBlock}>Block</button>
+            </div>
+          )}
+        </div>
       </div>
       {callErr && <div className="fail" style={{ margin: 12 }}>{callErr}</div>}
       <div style={{ flex: 1, overflowY: "auto", padding: 16, paddingTop: incoming ? 100 : 16 }}>
