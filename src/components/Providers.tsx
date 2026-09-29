@@ -1,11 +1,11 @@
 "use client";
-import CallRing from "./CallRing";
+import { useEffect } from "react";
 
 export default function Providers({ children }: { children: React.ReactNode }) {
-  return (
-    <>
-      {children}
-      <CallRing />
-    </>
-  );
+  useEffect(() => {
+    if (typeof window !== "undefined" && "serviceWorker" in navigator) {
+      navigator.serviceWorker.register("/sw.js").catch(() => {});
+    }
+  }, []);
+  return <>{children}</>;
 }
