@@ -3,23 +3,48 @@ import "./globals.css";
 import Providers from "@/components/Providers";
 
 export const metadata: Metadata = {
-  title: "hatch — BMS campus network",
-  description: "Find teammates. Ship projects. BMSCE campus network.",
+  title: {
+    default: "Hatch — BMS Campus Network",
+    template: "%s · Hatch",
+  },
+  description: "Find teammates. Ship projects. Grow your career. Built for BMSCE.",
+  applicationName: "Hatch",
   manifest: "/manifest.json",
-  appleWebApp: { capable: true, statusBarStyle: "black-translucent", title: "hatch" },
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: "black-translucent",
+    title: "Hatch",
+  },
+  formatDetection: { telephone: false },
+  other: {
+    "mobile-web-app-capable": "yes",
+  },
+  icons: {
+    icon: [{ url: "/icon.svg", type: "image/svg+xml" }],
+    apple: [{ url: "/icon.svg" }],
+  },
 };
 
 export const viewport: Viewport = {
-  themeColor: "#07070c",
+  themeColor: [
+    { media: "(prefers-color-scheme: dark)", color: "#07070c" },
+    { media: "(prefers-color-scheme: light)", color: "#07070c" },
+  ],
   width: "device-width",
   initialScale: 1,
   maximumScale: 1,
   userScalable: false,
+  viewportFit: "cover",
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en">
+      <head>
+        <link rel="apple-touch-icon" href="/icon.svg" />
+        <meta name="apple-mobile-web-app-capable" content="yes" />
+        <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+      </head>
       <body>
         <Providers>{children}</Providers>
       </body>

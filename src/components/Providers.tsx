@@ -1,5 +1,6 @@
 "use client";
 import { useEffect } from "react";
+import InstallBanner from "./InstallBanner";
 
 export default function Providers({ children }: { children: React.ReactNode }) {
   useEffect(() => {
@@ -7,5 +8,10 @@ export default function Providers({ children }: { children: React.ReactNode }) {
       navigator.serviceWorker.register("/sw.js").catch(() => {});
     }
   }, []);
-  return <>{children}</>;
+  return (
+    <>
+      {children}
+      <InstallBanner />
+    </>
+  );
 }
