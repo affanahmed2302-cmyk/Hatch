@@ -2,7 +2,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { supabase } from "@/lib/supabase";
+import { supabase, isSuperAdmin } from "@/lib/supabase";
 import {
   hasChatLock, setChatLockPin, clearChatLock, verifyPin, getDailyReminders, setDailyReminders,
 } from "@/lib/chatLock";
@@ -20,6 +20,7 @@ export default function SettingsPage() {
   const [msg, setMsg] = useState("");
   const [err, setErr] = useState("");
   const [userId, setUserId] = useState<string | null>(null);
+  const [email, setEmail] = useState("");
   const router = useRouter();
 
   useEffect(() => {
@@ -27,6 +28,7 @@ export default function SettingsPage() {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) { router.push("/login"); return; }
       setUserId(user.id);
+      setEmail(user.email || "");
       setLockOn(hasChatLock());
       setReminders(getDailyReminders());
       setInvite(await ensureInviteCode(user.id));
@@ -63,6 +65,21 @@ export default function SettingsPage() {
         <h1 className="h1" style={{ marginBottom: 14 }}>Settings</h1>
         {msg && <div className="ok" style={{ marginBottom: 10 }}>{msg}</div>}
         {err && <div className="fail" style={{ marginBottom: 10 }}>{err}</div>}
+
+        <Link href="/premium" className="card" style={{
+          display: "block", marginBottom: 12, textDecoration: "none", color: "inherit",
+          background: "linear-gradient(135deg,rgba(251,191,36,0.18),rgba(139,92,246,0.12))",
+          border: "1px solid rgba(251,191,36,0.35)",
+        }}>
+          <div style={{ fontWeight: 800 }}>✦ Hatch Premium</div>
+          <p className="muted" style={{ fontSize: 12, marginTop: 4 }}>₹120 / month · Private Circle & more</p>
+        </Link>
+
+        {isSuperAdmin(email) && (
+          <Link href="/admin/premium" className="btn" style={{ display: "block", textAlign: "center", marginBottom: 12 }}>
+            Admin · Premium approvals
+          </Link>
+        )}
 
         <div className="card stack" style={{ marginBottom: 12 }}>
           <div className="h2">Invite friends</div>
