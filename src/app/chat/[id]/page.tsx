@@ -8,6 +8,7 @@ import { startCall, endCall, respondCall, callEmbedUrl, type CallRow } from "@/l
 import {
   haptic, playPing, bumpChatStreak, getChatStreak, markMessagesRead, bumpDaily,
 } from "@/lib/obsession";
+import { blockUser } from "@/lib/safety";
 
 export default function ChatPage() {
   const { id: peerId } = useParams<{ id: string }>();
@@ -26,6 +27,9 @@ export default function ChatPage() {
   const [callErr, setCallErr] = useState("");
   const [streak, setStreak] = useState(0);
   const [peerTyping, setPeerTyping] = useState(false);
+  const [recording, setRecording] = useState(false);
+  const mediaRec = useRef<MediaRecorder | null>(null);
+  const chunks = useRef<Blob[]>([]);
   const bottom = useRef<HTMLDivElement>(null);
   const typingTimer = useRef<any>(null);
   const router = useRouter();
@@ -121,13 +125,58 @@ export default function ChatPage() {
     await loadMsgs(myId);
   }
 
+  async function startVoice() {
+    if (!myId || recording) return;
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const rec = new MediaRecorder(stream);
+      chunks.current = [];
+      rec.ondataavailable = (e) => { if (e.data.size) chunks.current.push(e.data); };
+      rec.onstop = async () => {
+        stream.getTracks().forEach(t => t.stop());
+        const blob = new Blob(chunks.current, { type: "audio/webm" });
+        const file = new File([blob], "voice.webm", { type: "audio/webm" });
+        const path = myId + "/voice-" + Date.now() + ".webm";
+        const { error } = await supabase.storage.from("chat-media").upload(path, file, { contentType: "audio/webm" });
+        if (error) {
+          setCallErr(error.message.includes("Bucket") || error.message.includes("not found")
+            ? "Storage bucket chat-media missing"
+            : error.message);
+          setRecording(false);
+          return;
+        }
+        const { data: pub } = supabase.storage.from("chat-media").getPublicUrl(path);
+        await supabase.from("messages").insert({
+          sender_id: myId,
+          receiver_id: peerId,
+          content: "🎤 Voice note",
+          media_url: pub.publicUrl,
+        });
+        setStreak(await bumpChatStreak(myId, peerId));
+        haptic(12);
+        await loadMsgs(myId);
+        setRecording(false);
+      };
+      mediaRec.current = rec;
+      rec.start();
+      setRecording(true);
+      haptic(8);
+    } catch {
+      setCallErr("Microphone permission needed");
+    }
+  }
+
+  function stopVoice() {
+    if (mediaRec.current && recording) mediaRec.current.stop();
+  }
+
   async function ring(audioOnly: boolean) {
     if (!myId) return;
     setCallErr("");
     haptic(15);
     const res = await startCall(myId, peerId, audioOnly ? "audio" : "video");
     if (!res.ok || !res.call) {
-      setCallErr(res.error || "Could not start call — run SQL if calls table missing");
+      setCallErr(res.error || "Could not start call");
       return;
     }
     setCallId(res.call.id);
@@ -156,6 +205,13 @@ export default function ChatPage() {
   async function hangup() {
     if (callId) await endCall(callId);
     setCallUrl(null); setCallId(null); setRingingOut(false); setIncoming(null);
+  }
+
+  async function doBlock() {
+    if (!myId) return;
+    if (!confirm("Block this user?")) return;
+    await blockUser(myId, peerId);
+    router.push("/inbox");
   }
 
   if (needPin) {
@@ -226,12 +282,18 @@ export default function ChatPage() {
         </div>
         <button className="btn-ghost btn-sm" onClick={() => ring(true)}>Audio</button>
         <button className="btn-ghost btn-sm" onClick={() => ring(false)}>Video</button>
+        <button className="btn-ghost btn-sm" style={{ color: "#f43f5e" }} onClick={doBlock}>Block</button>
       </div>
       {callErr && <div className="fail" style={{ margin: 12 }}>{callErr}</div>}
       <div style={{ flex: 1, overflowY: "auto", padding: 16, paddingTop: incoming ? 100 : 16 }}>
         {msgs.map(m => (
           <div key={m.id} className={m.sender_id === myId ? "bubble-me" : "bubble-them"} style={{ marginBottom: 8 }}>
-            {m.content}
+            {m.media_url ? (
+              <div>
+                <audio controls src={m.media_url} style={{ maxWidth: "100%", height: 36 }} />
+                <div style={{ fontSize: 11, opacity: 0.8 }}>Voice note</div>
+              </div>
+            ) : m.content}
             {m.sender_id === myId && m.read_at && (
               <span style={{ display: "block", fontSize: 10, opacity: 0.7, marginTop: 2 }}>Seen</span>
             )}
@@ -239,7 +301,20 @@ export default function ChatPage() {
         ))}
         <div ref={bottom} />
       </div>
-      <div className="row" style={{ padding: 12, borderTop: "1px solid var(--border)", gap: 8 }}>
+      <div className="row" style={{ padding: 12, borderTop: "1px solid var(--border)", gap: 8, alignItems: "center" }}>
+        <button
+          type="button"
+          className="btn-ghost btn-sm"
+          style={{
+            minWidth: 44, height: 44, borderRadius: 22,
+            background: recording ? "#f43f5e" : "rgba(139,92,246,0.2)",
+            fontSize: 18,
+          }}
+          onClick={recording ? stopVoice : startVoice}
+          title="Voice note"
+        >
+          {recording ? "■" : "🎤"}
+        </button>
         <input
           value={text}
           onChange={e => { setText(e.target.value); broadcastTyping(); }}
