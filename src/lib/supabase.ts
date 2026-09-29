@@ -68,25 +68,57 @@ export function yearToLabel(y: string | number | null | undefined): string {
 
 export async function saveProfile(userId: string, fields: Record<string, unknown>) {
   try {
-    const { year, full_name, username, ...rest } = fields as any
-    const payload: Record<string, unknown> = { id: userId, ...rest, updated_at: new Date().toISOString() }
-    if (year !== undefined) payload.year = yearToNumber(year as any)
-    if (full_name !== undefined) {
-      const name = String(full_name || '').trim()
+    const f = fields as any
+    const payload: Record<string, unknown> = {
+      id: userId,
+      updated_at: new Date().toISOString(),
+      college: f.college || 'BMS',
+    }
+
+    if (f.full_name !== undefined) {
+      const name = String(f.full_name || '').trim()
       if (name.length < 2) return { ok: false as const, error: 'Display name required', data: null }
       const { data: taken } = await supabase.from('profiles').select('id').ilike('full_name', name).neq('id', userId).maybeSingle()
       if (taken) return { ok: false as const, error: 'Name already taken', data: null }
       payload.full_name = name
     }
-    if (username !== undefined) {
-      const uname = String(username || '').trim().toLowerCase().replace(/[^a-z0-9_]/g, '')
+    if (f.username !== undefined) {
+      const uname = String(f.username || '').trim().toLowerCase().replace(/[^a-z0-9_]/g, '')
       if (uname.length < 3) return { ok: false as const, error: 'Username min 3 chars', data: null }
       const { data: takenU } = await supabase.from('profiles').select('id').eq('username', uname).neq('id', userId).maybeSingle()
       if (takenU) return { ok: false as const, error: 'Username taken', data: null }
       payload.username = uname
     }
-    if (!payload.college) payload.college = 'BMS'
-    const { data, error } = await supabase.from('profiles').upsert(payload, { onConflict: 'id' }).select('*').single()
+    if (f.bio !== undefined) payload.bio = f.bio
+    if (f.department !== undefined) payload.department = f.department
+    if (f.year !== undefined) payload.year = yearToNumber(f.year)
+    if (f.phone !== undefined) payload.phone = f.phone
+    if (f.github_handle !== undefined) payload.github_handle = f.github_handle
+    if (f.leetcode_handle !== undefined) payload.leetcode_handle = f.leetcode_handle
+    if (f.tech_stack !== undefined) payload.tech_stack = f.tech_stack
+    if (f.skills !== undefined) payload.skills = f.skills
+    if (f.avatar_url !== undefined) payload.avatar_url = f.avatar_url
+    if (f.career_goal !== undefined) payload.career_goal = f.career_goal
+    if (f.intent !== undefined) payload.intent = f.intent
+    if (f.availability !== undefined) payload.availability = f.availability
+    if (f.linkedin_url !== undefined) payload.linkedin_url = f.linkedin_url
+
+    let { data, error } = await supabase.from('profiles').upsert(payload, { onConflict: 'id' }).select('*').single()
+
+    if (error && (error.message.includes('schema cache') || error.message.includes('column'))) {
+      const core: Record<string, unknown> = {
+        id: userId,
+        updated_at: payload.updated_at,
+        college: payload.college,
+      }
+      for (const k of ['full_name', 'username', 'bio', 'department', 'year', 'phone', 'github_handle', 'leetcode_handle', 'tech_stack', 'skills', 'avatar_url']) {
+        if (payload[k] !== undefined) core[k] = payload[k]
+      }
+      const retry = await supabase.from('profiles').upsert(core, { onConflict: 'id' }).select('*').single()
+      data = retry.data
+      error = retry.error
+    }
+
     if (error) return { ok: false as const, error: error.message, data: null }
     return { ok: true as const, error: null, data }
   } catch (e: any) {
