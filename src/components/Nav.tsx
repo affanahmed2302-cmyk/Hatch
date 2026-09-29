@@ -6,7 +6,7 @@ const items = [
   { href: "/home", label: "Live", icon: "•" },
   { href: "/discover", label: "Match", icon: "◎" },
   { href: "/teams", label: "Teams", icon: "△" },
-  { href: "/clubs", label: "Clubs", icon: "✦" },
+  { href: "/coach", label: "Coach", icon: "★" },
   { href: "/inbox", label: "Inbox", icon: "◇" },
   { href: "/profile", label: "You", icon: "●" },
 ];
