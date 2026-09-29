@@ -11,6 +11,7 @@ export default function PublicProfilePage() {
   const { id } = useParams<{ id: string }>();
   const [me, setMe] = useState<string | null>(null);
   const [p, setP] = useState<any>(null);
+  const [certs, setCerts] = useState<any[]>([]);
   const [menu, setMenu] = useState(false);
   const [msg, setMsg] = useState("");
   const [loading, setLoading] = useState(true);
@@ -23,6 +24,8 @@ export default function PublicProfilePage() {
       setMe(user.id);
       const { data } = await supabase.from("profiles").select("*").eq("id", id).maybeSingle();
       setP(data);
+      const { data: c } = await supabase.from("certificates").select("*").eq("user_id", id).order("created_at", { ascending: false }).limit(12);
+      setCerts(c || []);
       if (user.id !== id) recordProfileView(user.id, id);
       setLoading(false);
     })();
@@ -51,6 +54,16 @@ export default function PublicProfilePage() {
     await reportUser(me, id, "inappropriate");
     setMsg("Report submitted");
     setMenu(false);
+  }
+
+  function share() {
+    const url = typeof window !== "undefined" ? window.location.href : "";
+    if (navigator.share) {
+      navigator.share({ title: displayName(p || {}), url }).catch(() => {});
+    } else {
+      navigator.clipboard?.writeText(url);
+      setMsg("Profile link copied");
+    }
   }
 
   if (loading) {
@@ -82,7 +95,8 @@ export default function PublicProfilePage() {
       <div className="topbar">
         <button className="btn-ghost btn-sm" onClick={() => router.back()}>←</button>
         <div className="logo" style={{ fontSize: 14 }}>Profile</div>
-        <div style={{ marginLeft: "auto", position: "relative" }}>
+        <button className="btn-ghost btn-sm" style={{ marginLeft: "auto" }} onClick={share}>Share</button>
+        <div style={{ position: "relative" }}>
           <button className="btn-ghost btn-sm" onClick={() => setMenu(!menu)} aria-label="More">···</button>
           {menu && (
             <div className="card" style={{
@@ -140,6 +154,19 @@ export default function PublicProfilePage() {
               {skills.map((s: string) => <span key={s} className="badge">{s}</span>)}
             </div>
             {p.tech_stack && <p className="muted" style={{ fontSize: 12 }}>{p.tech_stack}</p>}
+          </div>
+        )}
+
+        {certs.length > 0 && (
+          <div className="card" style={{ marginBottom: 12 }}>
+            <div className="h2" style={{ fontSize: 14, marginBottom: 8 }}>Certificates</div>
+            {certs.map((c: any) => (
+              <div key={c.id} style={{ marginBottom: 8 }}>
+                <p style={{ fontSize: 13, fontWeight: 600 }}>{c.title}</p>
+                {c.issuer && <p className="muted" style={{ fontSize: 12 }}>{c.issuer}</p>}
+                {c.url && <a href={c.url} target="_blank" rel="noreferrer" className="muted" style={{ fontSize: 12 }}>Open link</a>}
+              </div>
+            ))}
           </div>
         )}
 
