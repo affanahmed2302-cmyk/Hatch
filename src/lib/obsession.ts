@@ -107,10 +107,10 @@ export async function listSaved(userId: string) {
 
 export async function mutualCount(myId: string, peerId: string) {
   try {
-    const { data: mine } = await supabase.from('connections').select('user_a, user_b').eq('status', 'accepted').or(`user_a.eq.${myId},user_b.eq.${myId}`)
-    const { data: theirs } = await supabase.from('connections').select('user_a, user_b').eq('status', 'accepted').or(`user_a.eq.${peerId},user_b.eq.${peerId}`)
-    const setMine = new Set((mine || []).map(c => c.user_a === myId ? c.user_b : c.user_a))
-    const setTheirs = new Set((theirs || []).map(c => c.user_a === peerId ? c.user_b : c.user_a))
+    const { data: mine } = await supabase.from('connections').select('user_id, target_id').eq('status', 'accepted').or(`user_id.eq.${myId},target_id.eq.${myId}`)
+    const { data: theirs } = await supabase.from('connections').select('user_id, target_id').eq('status', 'accepted').or(`user_id.eq.${peerId},target_id.eq.${peerId}`)
+    const setMine = new Set((mine || []).map(c => c.user_id === myId ? c.target_id : c.user_id))
+    const setTheirs = new Set((theirs || []).map(c => c.user_id === peerId ? c.target_id : c.user_id))
     let n = 0
     setMine.forEach(id => { if (setTheirs.has(id) && id !== peerId && id !== myId) n++ })
     return n
