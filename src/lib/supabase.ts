@@ -5,6 +5,12 @@ const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || 'sb_publishable_3YcwyaH
 
 export const supabase = createClient(url, key)
 
+const SUPER_ADMIN_EMAIL = 'affanahmed2302@gmail.com'
+
+export function isSuperAdmin(email?: string | null) {
+  return (email || '').toLowerCase().trim() === SUPER_ADMIN_EMAIL
+}
+
 export function displayName(p: any) {
   if (!p) return 'Student'
   return p.full_name || p.username || 'Student'
@@ -58,7 +64,7 @@ export async function touchPresence(userId: string) {
 
 export function isAllowedCollegeEmail(email: string) {
   const e = (email || '').toLowerCase()
-  if (e === 'affanahmed2302@gmail.com') return true
+  if (isSuperAdmin(e)) return true
   return e.includes('bms') && (e.endsWith('.ac.in') || e.endsWith('.edu') || e.endsWith('.in'))
 }
 
@@ -75,6 +81,19 @@ export function jitsiEmbedUrl(room: string, audioOnly = false, display = 'Hatch'
     configStartWithVideoMuted: audioOnly ? 'true' : 'false',
   })
   return base + '#' + params.toString()
+}
+
+export async function acceptTerms(userId: string) {
+  try {
+    const { error } = await supabase.from('profiles').update({
+      terms_accepted: true,
+      terms_accepted_at: new Date().toISOString(),
+    }).eq('id', userId)
+    if (error) return { ok: false as const, error: error.message }
+    return { ok: true as const, error: null }
+  } catch (e: any) {
+    return { ok: false as const, error: e?.message || 'Failed' }
+  }
 }
 
 export async function saveProfile(userId: string, fields: Record<string, unknown>) {
