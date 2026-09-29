@@ -26,7 +26,7 @@ export default function SignupPage() {
     const code = String(Math.floor(100000 + Math.random() * 900000));
     setSentOtp(code);
     setStep("otp");
-    setMsg(`OTP sent (demo): ${code}`);
+    setMsg(`Dev OTP (SMS not wired yet — use this code): ${code}`);
   }
 
   async function finishSignup() {
@@ -41,9 +41,11 @@ export default function SignupPage() {
         await supabase.from("profiles").update({
           phone: phone.replace(/\D/g, "").slice(-10),
           phone_verified: true,
+          email_verified: !!data.user?.email_confirmed_at,
           college: "BMS",
         }).eq("id", uid);
       }
+      setMsg("Account created");
       router.replace("/terms");
     } catch (e: any) {
       setErr(e?.message || "Signup failed");
@@ -55,14 +57,14 @@ export default function SignupPage() {
     <div className="shell" style={{ padding: 24, display: "flex", flexDirection: "column", justifyContent: "center", minHeight: "100dvh" }}>
       <div className="logo" style={{ marginBottom: 20 }}>HATCH</div>
       <h1 className="h1" style={{ marginBottom: 8 }}>Join campus</h1>
-      <p className="muted" style={{ fontSize: 13, marginBottom: 16 }}>BMS institutional email required</p>
+      <p className="muted" style={{ fontSize: 13, marginBottom: 16 }}>BMS institutional email preferred. Super-admin email always allowed.</p>
       {err && <div className="fail" style={{ marginBottom: 10 }}>{err}</div>}
       {msg && <div className="ok" style={{ marginBottom: 10 }}>{msg}</div>}
       {step === "form" ? (
         <div className="stack">
-          <input type="email" placeholder="you@bmsce.ac.in" value={email} onChange={e => setEmail(e.target.value)} />
+          <input type="email" placeholder="College email" value={email} onChange={e => setEmail(e.target.value)} />
           <input type="password" placeholder="Password (min 6)" value={password} onChange={e => setPassword(e.target.value)} />
-          <input type="tel" placeholder="Phone (OTP)" value={phone} onChange={e => setPhone(e.target.value)} />
+          <input type="tel" placeholder="Phone" value={phone} onChange={e => setPhone(e.target.value)} />
           <button className="btn" onClick={startOtp}>Continue</button>
         </div>
       ) : (
