@@ -1,5 +1,6 @@
 -- Hatch growth schema: college pods, engagement widgets, referrals, RLS hardening
 -- Run in Supabase SQL Editor (safe to re-run)
+-- FIXED: lounge_messages column is sender_id (not user_id)
 
 -- 1) Profile columns for pan-India pods
 alter table public.profiles add column if not exists college_pod text default 'bmsce';
@@ -81,6 +82,7 @@ drop policy if exists "ref insert" on public.referrals;
 create policy "ref insert" on public.referrals for insert to authenticated with check (auth.uid() = inviter_id);
 
 -- 6) RLS hardening for core tables (idempotent)
+-- IMPORTANT: lounge_messages uses sender_id (see hatch_lounge.sql)
 do $$
 begin
   if exists (select 1 from information_schema.tables where table_schema='public' and table_name='profiles') then
@@ -94,21 +96,28 @@ begin
   end if;
 
   if exists (select 1 from information_schema.tables where table_schema='public' and table_name='messages') then
-    alter table public.messages enable row level security;
-    drop policy if exists "messages select participants" on public.messages;
-    create policy "messages select participants" on public.messages for select to authenticated
-      using (auth.uid() = sender_id or auth.uid() = receiver_id);
-    drop policy if exists "messages insert sender" on public.messages;
-    create policy "messages insert sender" on public.messages for insert to authenticated
-      with check (auth.uid() = sender_id);
+    if exists (select 1 from information_schema.columns where table_schema='public' and table_name='messages' and column_name='sender_id') then
+      alter table public.messages enable row level security;
+      drop policy if exists "messages select participants" on public.messages;
+      create policy "messages select participants" on public.messages for select to authenticated
+        using (auth.uid() = sender_id or auth.uid() = receiver_id);
+      drop policy if exists "messages insert sender" on public.messages;
+      create policy "messages insert sender" on public.messages for insert to authenticated
+        with check (auth.uid() = sender_id);
+    end if;
   end if;
 
   if exists (select 1 from information_schema.tables where table_schema='public' and table_name='lounge_messages') then
     alter table public.lounge_messages enable row level security;
     drop policy if exists "lounge read" on public.lounge_messages;
-    create policy "lounge read" on public.lounge_messages for select to authenticated using (true);
+    drop policy if exists "lounge_select" on public.lounge_messages;
+    create policy "lounge_select" on public.lounge_messages for select to authenticated using (true);
     drop policy if exists "lounge insert" on public.lounge_messages;
-    create policy "lounge insert" on public.lounge_messages for insert to authenticated with check (auth.uid() = user_id);
+    drop policy if exists "lounge_insert" on public.lounge_messages;
+    -- column is sender_id, NOT user_id
+    create policy "lounge_insert" on public.lounge_messages for insert to authenticated with check (auth.uid() = sender_id);
+    drop policy if exists "lounge_delete_own" on public.lounge_messages;
+    create policy "lounge_delete_own" on public.lounge_messages for delete to authenticated using (auth.uid() = sender_id);
   end if;
 
   if exists (select 1 from information_schema.tables where table_schema='public' and table_name='pulse_posts') then
