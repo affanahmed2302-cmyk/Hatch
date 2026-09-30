@@ -16,6 +16,8 @@ export default function Nav() {
     path.startsWith("/chat/") ||
     path === "/lounge" ||
     path.startsWith("/lounge/") ||
+    path.startsWith("/sparks") ||
+    path === "/pilot" ||
     path.startsWith("/login") ||
     path.startsWith("/signup") ||
     path.startsWith("/onboarding");
