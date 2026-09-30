@@ -1,7 +1,7 @@
 "use client";
 import { useState, useEffect } from "react";
 import Link from "next/link";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useRouter } from "next/navigation";
 import { supabase, isAllowedCollegeEmail, ensureProfile, collegePodFromEmail, extractDomain } from "@/lib/supabase";
 
 export default function SignupPage() {
@@ -16,12 +16,14 @@ export default function SignupPage() {
   const [loading, setLoading] = useState(false);
   const [refCode, setRefCode] = useState("");
   const router = useRouter();
-  const searchParams = useSearchParams();
 
   useEffect(() => {
-    const r = searchParams.get("ref") || "";
-    if (r) setRefCode(r);
-  }, [searchParams]);
+    try {
+      const q = new URLSearchParams(window.location.search);
+      const r = q.get("ref") || "";
+      if (r) setRefCode(r);
+    } catch { /* ignore */ }
+  }, []);
 
   function startOtp() {
     setErr("");
@@ -57,15 +59,6 @@ export default function SignupPage() {
           college_domain: domain,
           referred_by: refCode || null,
         }).eq("id", uid);
-        if (refCode) {
-          try {
-            await supabase.from("referrals").insert({
-              code: refCode,
-              inviter_id: uid,
-              invitee_id: uid,
-            });
-          } catch { /* optional */ }
-        }
       }
       setMsg("Account created");
       router.replace("/terms");
