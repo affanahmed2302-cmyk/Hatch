@@ -7,6 +7,7 @@ import {
   hasChatLock, setChatLockPin, clearChatLock, verifyPin, getDailyReminders, setDailyReminders,
 } from "@/lib/chatLock";
 import { ensureInviteCode, inviteUrl, trackEvent } from "@/lib/safety";
+import { isFeatureOn } from "@/lib/features";
 import { EcosystemDrawerCard } from "@/components/EcosystemGateway";
 import Nav from "@/components/Nav";
 
@@ -22,6 +23,7 @@ export default function SettingsPage() {
   const [err, setErr] = useState("");
   const [userId, setUserId] = useState<string | null>(null);
   const [email, setEmail] = useState("");
+  const [sparksOn, setSparksOn] = useState(false);
   const router = useRouter();
 
   useEffect(() => {
@@ -33,6 +35,7 @@ export default function SettingsPage() {
       setLockOn(hasChatLock());
       setReminders(getDailyReminders());
       setInvite(await ensureInviteCode(user.id));
+      setSparksOn(await isFeatureOn("feature_sparks"));
       trackEvent(user.id, "settings_open");
     })();
   }, [router]);
@@ -54,10 +57,9 @@ export default function SettingsPage() {
   }
 
   function copyInvite() {
-    const url = inviteUrl(invite);
-    // Viral loop: ?ref= on signup
-    const withRef = url.includes("?") ? url + "&ref=" + invite : url + (url.includes("/signup") ? "?ref=" + invite : "?ref=" + invite);
-    navigator.clipboard?.writeText(withRef.includes("ref=") ? withRef : `${typeof window !== "undefined" ? window.location.origin : ""}/signup?ref=${invite}`);
+    navigator.clipboard?.writeText(
+      `${typeof window !== "undefined" ? window.location.origin : ""}/signup?ref=${invite}`
+    );
     setMsg("Invite link copied — share on WhatsApp");
     if (userId) trackEvent(userId, "invite_copy", { code: invite });
   }
@@ -80,12 +82,17 @@ export default function SettingsPage() {
         </Link>
 
         {isSuperAdmin(email) && (
-          <Link href="/admin/premium" className="btn" style={{ display: "block", textAlign: "center", marginBottom: 12 }}>
-            Admin · Premium approvals
-          </Link>
+          <>
+            <Link href="/admin/dashboard" className="btn" style={{ display: "block", textAlign: "center", marginBottom: 8 }}>
+              Super-admin switchboard
+            </Link>
+            <Link href="/admin/premium" className="btn-ghost" style={{ display: "block", textAlign: "center", marginBottom: 12 }}>
+              Premium UTR approvals
+            </Link>
+          </>
         )}
 
-        <EcosystemDrawerCard />
+        <EcosystemDrawerCard showSparks={sparksOn} />
 
         <div className="card stack" style={{ marginBottom: 12 }}>
           <div className="h2">Invite friends</div>
