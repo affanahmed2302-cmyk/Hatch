@@ -13,6 +13,7 @@ import {
 } from "@/lib/engagement";
 import { fetchFeedEvents } from "@/lib/clubCore";
 import { EcosystemPortalGrid } from "@/components/EcosystemGateway";
+import MidnightBlackout from "@/components/MidnightBlackout";
 import Nav from "@/components/Nav";
 
 const PLACES = ["Library", "Canteen", "Nescafe", "Quad", "Main gate"];
@@ -169,6 +170,27 @@ export default function HomePage() {
       <div className="page">
         {msg && <div className="ok" style={{ marginBottom: 10 }}>{msg}</div>}
         {err && <div className="fail" style={{ marginBottom: 10 }}>{err}</div>}
+
+        <MidnightBlackout userId={myId} />
+
+        <div className="row" style={{ gap: 8, marginBottom: 10 }}>
+          <Link href="/radar" className="card" style={{
+            flex: 1, textDecoration: "none", color: "inherit", marginBottom: 0,
+            background: "linear-gradient(135deg,rgba(45,212,191,0.15),rgba(14,116,144,0.12))",
+            border: "1px solid rgba(45,212,191,0.35)",
+          }}>
+            <div style={{ fontWeight: 800, fontSize: 13 }}>Quantum Radar</div>
+            <p className="muted" style={{ fontSize: 10, marginTop: 2 }}>Nearby intents · burner 1h</p>
+          </Link>
+          <Link href="/ghost" className="card" style={{
+            flex: 1, textDecoration: "none", color: "inherit", marginBottom: 0,
+            background: "linear-gradient(135deg,rgba(99,102,241,0.2),rgba(168,85,247,0.12))",
+            border: "1px solid rgba(167,139,250,0.35)",
+          }}>
+            <div style={{ fontWeight: 800, fontSize: 13 }}>Ghost Teammate</div>
+            <p className="muted" style={{ fontSize: 10, marginTop: 2 }}>AI squad negotiator</p>
+          </Link>
+        </div>
 
         <div className="card row" style={{ marginBottom: 10, gap: 10, alignItems: "center",
           background: streak >= 3 ? "linear-gradient(135deg,rgba(251,146,60,0.2),rgba(239,68,68,0.1))" : undefined }}>
