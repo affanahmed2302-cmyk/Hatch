@@ -1,8 +1,7 @@
--- Hatch growth schema: college pods, engagement widgets, referrals, RLS hardening
--- Run in Supabase SQL Editor (safe to re-run)
--- FIXED: lounge_messages column is sender_id (not user_id)
+-- Hatch growth schema (NO dollar-quote blocks — safe to paste on phone)
+-- Fixed: lounge_messages uses sender_id
 
--- 1) Profile columns for pan-India pods
+-- 1) Profile columns
 alter table public.profiles add column if not exists college_pod text default 'bmsce';
 alter table public.profiles add column if not exists college_domain text;
 alter table public.profiles add column if not exists referred_by text;
@@ -12,7 +11,7 @@ alter table public.profiles add column if not exists last_open_date date;
 create index if not exists idx_profiles_college_pod on public.profiles (college_pod);
 create index if not exists idx_profiles_rep on public.profiles (rep_score desc nulls last);
 
--- 2) Daily vibe poll (anonymous)
+-- 2) Vibe checks
 create table if not exists public.vibe_checks (
   id uuid primary key default gen_random_uuid(),
   user_id uuid not null references auth.users(id) on delete cascade,
@@ -27,7 +26,7 @@ create policy "vibe read" on public.vibe_checks for select to authenticated usin
 drop policy if exists "vibe insert own" on public.vibe_checks;
 create policy "vibe insert own" on public.vibe_checks for insert to authenticated with check (auth.uid() = user_id);
 
--- 3) Study beacons (1h)
+-- 3) Study beacons
 create table if not exists public.study_beacons (
   id uuid primary key default gen_random_uuid(),
   user_id uuid not null references auth.users(id) on delete cascade,
@@ -81,50 +80,29 @@ create policy "ref read own" on public.referrals for select to authenticated usi
 drop policy if exists "ref insert" on public.referrals;
 create policy "ref insert" on public.referrals for insert to authenticated with check (auth.uid() = inviter_id);
 
--- 6) RLS hardening for core tables (idempotent)
--- IMPORTANT: lounge_messages uses sender_id (see hatch_lounge.sql)
-do $$
-begin
-  if exists (select 1 from information_schema.tables where table_schema='public' and table_name='profiles') then
-    alter table public.profiles enable row level security;
-    drop policy if exists "profiles select auth" on public.profiles;
-    create policy "profiles select auth" on public.profiles for select to authenticated using (true);
-    drop policy if exists "profiles update own" on public.profiles;
-    create policy "profiles update own" on public.profiles for update to authenticated using (auth.uid() = id);
-    drop policy if exists "profiles insert own" on public.profiles;
-    create policy "profiles insert own" on public.profiles for insert to authenticated with check (auth.uid() = id);
-  end if;
+-- 6) Profiles RLS
+alter table public.profiles enable row level security;
+drop policy if exists "profiles select auth" on public.profiles;
+create policy "profiles select auth" on public.profiles for select to authenticated using (true);
+drop policy if exists "profiles update own" on public.profiles;
+create policy "profiles update own" on public.profiles for update to authenticated using (auth.uid() = id);
+drop policy if exists "profiles insert own" on public.profiles;
+create policy "profiles insert own" on public.profiles for insert to authenticated with check (auth.uid() = id);
 
-  if exists (select 1 from information_schema.tables where table_schema='public' and table_name='messages') then
-    if exists (select 1 from information_schema.columns where table_schema='public' and table_name='messages' and column_name='sender_id') then
-      alter table public.messages enable row level security;
-      drop policy if exists "messages select participants" on public.messages;
-      create policy "messages select participants" on public.messages for select to authenticated
-        using (auth.uid() = sender_id or auth.uid() = receiver_id);
-      drop policy if exists "messages insert sender" on public.messages;
-      create policy "messages insert sender" on public.messages for insert to authenticated
-        with check (auth.uid() = sender_id);
-    end if;
-  end if;
+-- 7) Lounge RLS (column is sender_id)
+alter table public.lounge_messages enable row level security;
+drop policy if exists "lounge read" on public.lounge_messages;
+drop policy if exists "lounge_select" on public.lounge_messages;
+create policy "lounge_select" on public.lounge_messages for select to authenticated using (true);
+drop policy if exists "lounge insert" on public.lounge_messages;
+drop policy if exists "lounge_insert" on public.lounge_messages;
+create policy "lounge_insert" on public.lounge_messages for insert to authenticated with check (auth.uid() = sender_id);
+drop policy if exists "lounge_delete_own" on public.lounge_messages;
+create policy "lounge_delete_own" on public.lounge_messages for delete to authenticated using (auth.uid() = sender_id);
 
-  if exists (select 1 from information_schema.tables where table_schema='public' and table_name='lounge_messages') then
-    alter table public.lounge_messages enable row level security;
-    drop policy if exists "lounge read" on public.lounge_messages;
-    drop policy if exists "lounge_select" on public.lounge_messages;
-    create policy "lounge_select" on public.lounge_messages for select to authenticated using (true);
-    drop policy if exists "lounge insert" on public.lounge_messages;
-    drop policy if exists "lounge_insert" on public.lounge_messages;
-    -- column is sender_id, NOT user_id
-    create policy "lounge_insert" on public.lounge_messages for insert to authenticated with check (auth.uid() = sender_id);
-    drop policy if exists "lounge_delete_own" on public.lounge_messages;
-    create policy "lounge_delete_own" on public.lounge_messages for delete to authenticated using (auth.uid() = sender_id);
-  end if;
-
-  if exists (select 1 from information_schema.tables where table_schema='public' and table_name='pulse_posts') then
-    alter table public.pulse_posts enable row level security;
-    drop policy if exists "pulse read" on public.pulse_posts;
-    create policy "pulse read" on public.pulse_posts for select to authenticated using (true);
-    drop policy if exists "pulse insert" on public.pulse_posts;
-    create policy "pulse insert" on public.pulse_posts for insert to authenticated with check (auth.uid() = author_id);
-  end if;
-end $$;
+-- 8) Pulse RLS
+alter table public.pulse_posts enable row level security;
+drop policy if exists "pulse read" on public.pulse_posts;
+create policy "pulse read" on public.pulse_posts for select to authenticated using (true);
+drop policy if exists "pulse insert" on public.pulse_posts;
+create policy "pulse insert" on public.pulse_posts for insert to authenticated with check (auth.uid() = author_id);
