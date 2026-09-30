@@ -11,6 +11,7 @@ import {
   VIBE_OPTIONS, voteVibe, fetchVibeCounts, setStudyBeacon, fetchStudyBeacons,
   postBounty, fetchBounties, bumpOpenStreak, streakTier, DEFAULT_EVENTS, eventCountdown,
 } from "@/lib/engagement";
+import { fetchFeedEvents } from "@/lib/clubCore";
 import { EcosystemPortalGrid } from "@/components/EcosystemGateway";
 import Nav from "@/components/Nav";
 
@@ -36,13 +37,14 @@ export default function HomePage() {
   const [streak, setStreak] = useState(0);
   const [repFlash, setRepFlash] = useState(false);
   const [myRep, setMyRep] = useState(0);
+  const [clubEvents, setClubEvents] = useState<any[]>([]);
   const [tick, setTick] = useState(0);
   const router = useRouter();
 
   async function refresh(uid: string) {
-    const [b, f, p, r, vc, sb, mb] = await Promise.all([
+    const [b, f, p, r, vc, sb, mb, ce] = await Promise.all([
       fetchBubbles(), fetchFreeNow(), fetchPulseFeed(), fetchDailyRecap(uid),
-      fetchVibeCounts(), fetchStudyBeacons(), fetchBounties(),
+      fetchVibeCounts(), fetchStudyBeacons(), fetchBounties(), fetchFeedEvents(8),
     ]);
     setBubbles(b);
     setFree(f);
@@ -51,6 +53,7 @@ export default function HomePage() {
     setVibeCounts(vc);
     setBeacons(sb);
     setBounties(mb);
+    setClubEvents(ce);
   }
 
   useEffect(() => {
@@ -136,7 +139,7 @@ export default function HomePage() {
   const pulseList = Array.isArray(pulse) ? pulse : [];
   const tickerText = pulseList.slice(0, 8).map((p: any) => p.content).join("  ·  ") || "Be the first pulse of the day…";
   const tier = streakTier(streak);
-  void tick; // refresh countdowns
+  void tick;
 
   return (
     <div className="shell">
@@ -167,7 +170,6 @@ export default function HomePage() {
         {msg && <div className="ok" style={{ marginBottom: 10 }}>{msg}</div>}
         {err && <div className="fail" style={{ marginBottom: 10 }}>{err}</div>}
 
-        {/* 4 · Campus streak flame */}
         <div className="card row" style={{ marginBottom: 10, gap: 10, alignItems: "center",
           background: streak >= 3 ? "linear-gradient(135deg,rgba(251,146,60,0.2),rgba(239,68,68,0.1))" : undefined }}>
           <span style={{ fontSize: 22 }}>{tier.emoji}</span>
@@ -177,7 +179,6 @@ export default function HomePage() {
           </div>
         </div>
 
-        {/* 3 · BMSCE Tea Ticker */}
         <div className="card" style={{ marginBottom: 10, padding: "10px 12px", overflow: "hidden" }}>
           <div className="muted" style={{ fontSize: 10, marginBottom: 4, fontWeight: 700 }}>TEA TICKER</div>
           <div style={{ whiteSpace: "nowrap", overflow: "hidden" }}>
@@ -188,7 +189,19 @@ export default function HomePage() {
           </div>
         </div>
 
-        {/* 7 · Who's skipping / free now count */}
+        {clubEvents.length > 0 && (
+          <div className="card" style={{ marginBottom: 10 }}>
+            <div className="h2" style={{ marginBottom: 8, fontSize: 14 }}>Club events</div>
+            {clubEvents.map((ev) => (
+              <div key={ev.id} style={{ marginBottom: 8, paddingTop: 6, borderTop: "1px solid var(--border)" }}>
+                <div style={{ fontWeight: 700, fontSize: 13 }}>{ev.title}</div>
+                {ev.body && <p className="muted" style={{ fontSize: 12 }}>{ev.body}</p>}
+                {ev.venue && <p className="muted" style={{ fontSize: 11 }}>{ev.venue}</p>}
+              </div>
+            ))}
+          </div>
+        )}
+
         <div className="card row" style={{ marginBottom: 10, gap: 8, alignItems: "center" }}>
           <div style={{ flex: 1 }}>
             <div style={{ fontWeight: 700, fontSize: 13 }}>Free now</div>
@@ -197,7 +210,6 @@ export default function HomePage() {
           <span className="badge">{free.length}</span>
         </div>
 
-        {/* 1 · Flash Vibe Check */}
         <div className="card" style={{ marginBottom: 10 }}>
           <div className="h2" style={{ marginBottom: 8, fontSize: 14 }}>Flash vibe · today</div>
           <div className="row" style={{ gap: 6, flexWrap: "wrap" }}>
@@ -209,7 +221,6 @@ export default function HomePage() {
           </div>
         </div>
 
-        {/* 2 · 1-Hour Study Beacon */}
         <div className="card" style={{ marginBottom: 10 }}>
           <div className="h2" style={{ marginBottom: 8, fontSize: 14 }}>Study beacon · 1h</div>
           <div className="row" style={{ gap: 6, flexWrap: "wrap", marginBottom: 8 }}>
@@ -225,7 +236,6 @@ export default function HomePage() {
           ))}
         </div>
 
-        {/* 8 · Club event countdown */}
         <div className="card" style={{ marginBottom: 10 }}>
           <div className="h2" style={{ marginBottom: 8, fontSize: 14 }}>Campus countdowns</div>
           {DEFAULT_EVENTS.map((ev) => (
@@ -236,13 +246,11 @@ export default function HomePage() {
           ))}
         </div>
 
-        {/* 9 · Ecosystem portal grid */}
         <div className="card" style={{ marginBottom: 10 }}>
           <div className="h2" style={{ marginBottom: 8, fontSize: 14 }}>Ecosystem</div>
           <EcosystemPortalGrid compact />
         </div>
 
-        {/* 5 · Micro-bounty board */}
         <div className="card" style={{ marginBottom: 10 }}>
           <div className="h2" style={{ marginBottom: 8, fontSize: 14 }}>Micro-bounties</div>
           <div className="row" style={{ gap: 8, marginBottom: 8 }}>
@@ -257,7 +265,6 @@ export default function HomePage() {
           {!bounties.length && <p className="muted" style={{ fontSize: 11 }}>No open bounties</p>}
         </div>
 
-        {/* 6 · AI icebreaker shortcut into discover */}
         <Link href="/discover" className="card" style={{
           display: "block", marginBottom: 10, textDecoration: "none", color: "inherit",
           border: "1px solid rgba(167,139,250,0.4)",
@@ -266,7 +273,6 @@ export default function HomePage() {
           <p className="muted" style={{ fontSize: 11, marginTop: 2 }}>Open Discover → empty chats get 1-tap starters</p>
         </Link>
 
-        {/* 10 · Rep flash is topbar; Lounge CTA */}
         <Link
           href="/lounge"
           className="card"
