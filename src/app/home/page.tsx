@@ -7,7 +7,6 @@ import {
   fetchBubbles, postBubble, fetchFreeNow, setFreeNow, fetchDailyRecap,
   haptic, playPing,
 } from "@/lib/obsession";
-import { fetchActiveIntents } from "@/lib/intents";
 import Nav from "@/components/Nav";
 
 const PLACES = ["Library", "Canteen", "Nescafe", "Quad", "Main gate"];
@@ -103,6 +102,31 @@ export default function HomePage() {
         {msg && <div className="ok" style={{ marginBottom: 10 }}>{msg}</div>}
         {err && <div className="fail" style={{ marginBottom: 10 }}>{err}</div>}
 
+        <Link
+          href="/lounge"
+          className="card"
+          style={{
+            display: "block", marginBottom: 14, textDecoration: "none", color: "inherit",
+            background: "linear-gradient(135deg,rgba(88,101,242,0.35),rgba(124,58,237,0.2))",
+            border: "1px solid rgba(88,101,242,0.5)",
+            boxShadow: "0 8px 28px rgba(88,101,242,0.25)",
+          }}
+        >
+          <div className="row" style={{ gap: 12, alignItems: "center" }}>
+            <div style={{
+              width: 52, height: 52, borderRadius: 14,
+              background: "linear-gradient(135deg,#5865F2,#8b5cf6)",
+              display: "flex", alignItems: "center", justifyContent: "center",
+              fontWeight: 900, fontSize: 22, color: "#fff",
+            }}>#</div>
+            <div style={{ flex: 1 }}>
+              <div style={{ fontWeight: 800, fontSize: 16 }}>Campus Lounge</div>
+              <p className="muted" style={{ fontSize: 12, marginTop: 2 }}>Discord-style open chat · tap to talk</p>
+            </div>
+            <span className="badge" style={{ background: "#5865F2", color: "#fff" }}>CHAT</span>
+          </div>
+        </Link>
+
         <div className="card" style={{ marginBottom: 12 }}>
           <div className="h2" style={{ marginBottom: 8 }}>Campus bubbles · 24h</div>
           <div className="row" style={{ gap: 8, marginBottom: 8 }}>
@@ -164,9 +188,9 @@ export default function HomePage() {
 
         <div className="row" style={{ gap: 8, flexWrap: "wrap" }}>
           <Link href="/discover" className="btn btn-sm">Find people</Link>
+          <Link href="/lounge" className="btn-ghost btn-sm">Lounge chat</Link>
           <Link href="/teams" className="btn-ghost btn-sm">Teams</Link>
           <Link href="/clubs" className="btn-ghost btn-sm">Clubs</Link>
-          <Link href="/saved" className="btn-ghost btn-sm">Saved</Link>
         </div>
       </div>
       <Nav />
