@@ -4,7 +4,6 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { supabase, displayName, rateLimit, isRecentlyOnline } from "@/lib/supabase";
 import { haptic, playPing } from "@/lib/obsession";
-import Nav from "@/components/Nav";
 
 const CHANNELS = [
   { id: "general", label: "# general", desc: "Everyone · campus talk" },
@@ -25,7 +24,6 @@ type Msg = {
 
 export default function LoungePage() {
   const [myId, setMyId] = useState<string | null>(null);
-  const [myName, setMyName] = useState("Hatch");
   const [channel, setChannel] = useState("general");
   const [msgs, setMsgs] = useState<Msg[]>([]);
   const [text, setText] = useState("");
@@ -34,6 +32,7 @@ export default function LoungePage() {
   const [err, setErr] = useState("");
   const [showChannels, setShowChannels] = useState(false);
   const bottom = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
   const router = useRouter();
 
   useEffect(() => {
@@ -41,8 +40,6 @@ export default function LoungePage() {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) { router.push("/login"); return; }
       setMyId(user.id);
-      const { data: me } = await supabase.from("profiles").select("full_name, username").eq("id", user.id).maybeSingle();
-      setMyName(displayName(me || {}) || "Hatch");
       const since = new Date(Date.now() - 5 * 60 * 1000).toISOString();
       const { count } = await supabase.from("profiles").select("id", { count: "exact", head: true }).gte("last_seen", since);
       setOnlineCount(count || 0);
@@ -51,12 +48,19 @@ export default function LoungePage() {
   }, [router]);
 
   async function loadMsgs(ch: string) {
-    const { data } = await supabase
+    const { data, error } = await supabase
       .from("lounge_messages")
       .select("id, sender_id, channel, content, created_at")
       .eq("channel", ch)
       .order("created_at", { ascending: true })
       .limit(100);
+    if (error) {
+      if (error.message.includes("lounge_messages") || error.code === "42P01") {
+        setErr("Lounge table missing — run hatch_lounge.sql in Supabase");
+      }
+      setMsgs([]);
+      return;
+    }
     if (!data?.length) { setMsgs([]); return; }
     const ids = [...new Set(data.map((m) => m.sender_id))];
     const { data: profs } = await supabase
@@ -99,14 +103,17 @@ export default function LoungePage() {
       content: body,
     });
     if (error) {
-      setErr(error.message.includes("lounge_messages") || error.code === "42P01"
-        ? "Run hatch_lounge.sql in Supabase first"
-        : error.message);
+      setErr(
+        error.message.includes("lounge_messages") || error.code === "42P01"
+          ? "Run hatch_lounge.sql in Supabase first"
+          : error.message
+      );
       setText(body);
       return;
     }
     haptic(8);
     await loadMsgs(channel);
+    inputRef.current?.focus();
   }
 
   function timeLabel(iso: string) {
@@ -129,9 +136,19 @@ export default function LoungePage() {
   }
 
   return (
-    <div className="shell" style={{ display: "flex", flexDirection: "column", paddingBottom: 0 }}>
-      <div className="topbar" style={{ gap: 8 }}>
-        <Link href="/inbox" className="btn-ghost btn-sm">←</Link>
+    <div
+      className="shell"
+      style={{
+        display: "flex",
+        flexDirection: "column",
+        paddingBottom: 0,
+        height: "100dvh",
+        maxHeight: "100dvh",
+        overflow: "hidden",
+      }}
+    >
+      <div className="topbar" style={{ gap: 8, flexShrink: 0 }}>
+        <Link href="/home" className="btn-ghost btn-sm">←</Link>
         <button
           className="btn-ghost btn-sm"
           style={{ flex: 1, textAlign: "left", minWidth: 0 }}
@@ -139,7 +156,7 @@ export default function LoungePage() {
         >
           <div style={{ fontWeight: 800, fontSize: 15 }}>{chMeta.label}</div>
           <div className="muted" style={{ fontSize: 11 }}>
-            {onlineCount > 0 ? `${onlineCount} online · ` : ""}{chMeta.desc} · tap to switch
+            {onlineCount > 0 ? `${onlineCount} online · ` : ""}{chMeta.desc} · tap channels
           </div>
         </button>
       </div>
@@ -159,7 +176,7 @@ export default function LoungePage() {
           >
             <div className="h2" style={{ marginBottom: 12 }}>Campus channels</div>
             <p className="muted" style={{ fontSize: 12, marginBottom: 12 }}>
-              Like Discord · open to every BMS student · no interest match needed
+              Like Discord · every BMS student · no match needed
             </p>
             {CHANNELS.map((c) => (
               <button
@@ -176,18 +193,18 @@ export default function LoungePage() {
         </div>
       )}
 
-      <div style={{ flex: 1, overflowY: "auto", padding: "12px 16px" }}>
-        <div className="card" style={{ marginBottom: 14, background: "linear-gradient(135deg,rgba(124,58,237,0.2),rgba(236,72,153,0.1))" }}>
-          <p style={{ fontSize: 13, fontWeight: 700 }}>Campus Lounge</p>
+      <div style={{ flex: 1, overflowY: "auto", padding: "12px 16px", minHeight: 0 }}>
+        <div className="card" style={{ marginBottom: 14, background: "linear-gradient(135deg,rgba(88,101,242,0.25),rgba(124,58,237,0.12))" }}>
+          <p style={{ fontSize: 13, fontWeight: 700 }}>Campus Lounge · open chat</p>
           <p className="muted" style={{ fontSize: 12, marginTop: 4 }}>
-            Open chat for all BMS students — placements, hackathons, study, random. Be useful, no spam.
+            Type below and hit Send. Switch channel from the title.
           </p>
         </div>
 
-        {msgs.length === 0 && (
+        {msgs.length === 0 && !err && (
           <div className="empty" style={{ padding: "24px 8px" }}>
             <p style={{ fontWeight: 700 }}>Be the first in {chMeta.label}</p>
-            <p className="muted" style={{ fontSize: 13 }}>Say hi or drop a useful note</p>
+            <p className="muted" style={{ fontSize: 13 }}>Say hi — message box is at the bottom</p>
           </div>
         )}
 
@@ -227,20 +244,32 @@ export default function LoungePage() {
         <div ref={bottom} />
       </div>
 
-      {err && <div className="fail" style={{ margin: "0 12px 8px" }}>{err}</div>}
+      {err && <div className="fail" style={{ margin: "0 12px 8px", flexShrink: 0 }}>{err}</div>}
 
-      <div className="row" style={{ padding: 12, borderTop: "1px solid var(--border)", gap: 8 }}>
+      <div
+        className="row"
+        style={{
+          padding: "12px 12px calc(12px + env(safe-area-inset-bottom))",
+          borderTop: "1px solid var(--border)",
+          gap: 8,
+          flexShrink: 0,
+          background: "rgba(7,7,12,0.95)",
+        }}
+      >
         <input
+          ref={inputRef}
           value={text}
           onChange={(e) => setText(e.target.value)}
           onKeyDown={(e) => e.key === "Enter" && !e.shiftKey && send()}
-          placeholder={`Message ${chMeta.label}`}
+          placeholder="Type a message…"
           maxLength={500}
           style={{ flex: 1 }}
+          autoComplete="off"
         />
-        <button className="btn btn-sm" onClick={send} disabled={!text.trim()}>Send</button>
+        <button className="btn btn-sm" onClick={send} disabled={!text.trim()}>
+          Send
+        </button>
       </div>
-      <Nav />
     </div>
   );
 }
