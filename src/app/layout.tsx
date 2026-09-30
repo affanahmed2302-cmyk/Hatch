@@ -1,13 +1,14 @@
 import type { Metadata, Viewport } from "next";
 import "./globals.css";
 import Providers from "@/components/Providers";
+import PilotButton from "@/components/PilotButton";
 
 export const metadata: Metadata = {
   title: {
-    default: "Hatch — BMS Campus Network",
+    default: "Hatch — Campus Network",
     template: "%s · Hatch",
   },
-  description: "Find teammates. Ship projects. Grow your career. Built for BMSCE.",
+  description: "Find teammates. Ship projects. Grow your career. Built for campus.",
   applicationName: "Hatch",
   manifest: "/manifest.json",
   appleWebApp: {
@@ -46,7 +47,10 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
       </head>
       <body>
-        <Providers>{children}</Providers>
+        <Providers>
+          {children}
+          <PilotButton />
+        </Providers>
       </body>
     </html>
   );
