@@ -1,4 +1,5 @@
 import { createClient } from '@supabase/supabase-js'
+import { isAllowedStudentEmail, collegePodFromEmail, extractDomain } from './college'
 
 export const supabase = createClient(
   'https://ahtabgrlkyjjjqxvndlb.supabase.co',
@@ -12,19 +13,17 @@ export function isSuperAdmin(email?: string | null) {
   return SUPER_ADMINS.includes(email.toLowerCase())
 }
 
+/** Universal student email (pan-India) + super admin bypass */
 export function isAllowedCollegeEmail(email: string): { ok: boolean; error?: string } {
   const e = (email || '').trim().toLowerCase()
   if (!e || !e.includes('@')) return { ok: false, error: 'Enter a valid email' }
   if (SUPER_ADMINS.includes(e)) return { ok: true }
-  const domain = e.split('@')[1] || ''
-  const blocked = ['gmail.com','googlemail.com','yahoo.com','yahoo.co.in','outlook.com','hotmail.com','live.com','icloud.com','proton.me','protonmail.com','aol.com','mail.com','yandex.com','zoho.com']
-  if (blocked.includes(domain)) return { ok: false, error: 'Public emails blocked — use BMS institutional email' }
-  const hasBms = domain.includes('bms')
-  const okTld = domain.endsWith('.ac.in') || domain.endsWith('.edu') || domain.endsWith('.edu.in') || (domain.includes('bms') && domain.endsWith('.in'))
-  if (!hasBms) return { ok: false, error: 'Use your BMS institutional email (domain must contain bms)' }
-  if (!okTld) return { ok: false, error: 'Email must end with .ac.in, .edu, or college .in' }
+  const res = isAllowedStudentEmail(e)
+  if (!res.ok) return { ok: false, error: res.error }
   return { ok: true }
 }
+
+export { collegePodFromEmail, extractDomain, isAllowedStudentEmail }
 
 export async function touchPresence(userId: string) {
   try {
@@ -97,6 +96,8 @@ export async function saveProfile(userId: string, fields: Record<string, unknown
       updated_at: new Date().toISOString(),
       college: f.college || 'BMS',
     }
+    if (f.college_pod !== undefined) payload.college_pod = f.college_pod
+    if (f.college_domain !== undefined) payload.college_domain = f.college_domain
     if (f.full_name !== undefined) {
       const name = String(f.full_name || '').trim()
       if (name.length < 2) return { ok: false as const, error: 'Display name required', data: null }
@@ -149,8 +150,11 @@ export async function ensureProfile(userId: string, email?: string | null) {
   try {
     const { data } = await supabase.from('profiles').select('id').eq('id', userId).maybeSingle()
     if (!data) {
+      const pod = email ? collegePodFromEmail(email) : 'bmsce'
+      const domain = email ? extractDomain(email) : null
       await supabase.from('profiles').upsert({
-        id: userId, email: email || null, college: 'BMS', role: 'student',
+        id: userId, email: email || null, college: pod.toUpperCase(), college_pod: pod,
+        college_domain: domain, role: 'student',
         skills: [], connection_count: 0, terms_accepted: false, rep_score: 0,
       }, { onConflict: 'id' })
     }

@@ -29,6 +29,11 @@ export default function PremiumPage() {
       const st = await getPremiumStatus(user.id);
       setActive(st.active);
       setUntil(st.until);
+      // Zero-friction: already premium → Private Circle
+      if (st.active) {
+        setLoading(false);
+        return;
+      }
       setLoading(false);
     })();
   }, [router]);
@@ -36,11 +41,15 @@ export default function PremiumPage() {
   async function submit() {
     if (!userId) return;
     setSending(true); setErr(""); setMsg("");
-    const res = await submitPremiumRequest(userId, plan, ref, note);
-    if (!res.ok) setErr(res.error || "Failed");
-    else {
-      setMsg("Request sent · admin will approve within 24 hours after payment is verified");
-      setRef(""); setNote("");
+    try {
+      const res = await submitPremiumRequest(userId, plan, ref, note);
+      if (!res.ok) setErr(res.error || "Failed");
+      else {
+        setMsg("Request sent · admin verifies UPI within 24h · then open Private Circle");
+        setRef(""); setNote("");
+      }
+    } catch (e: any) {
+      setErr(e?.message || "Submit failed");
     }
     setSending(false);
   }
@@ -67,25 +76,25 @@ export default function PremiumPage() {
               Until {until ? new Date(until).toLocaleDateString() : "—"}
             </p>
             <Link href="/circle" className="btn" style={{ display: "block", textAlign: "center", marginTop: 12 }}>
-              Open Private Circle
+              Enter Private Circle →
             </Link>
           </div>
         ) : (
           <div className="card" style={{ marginBottom: 14, background: "linear-gradient(135deg,rgba(139,92,246,0.2),rgba(236,72,153,0.12))" }}>
             <div style={{ fontWeight: 800, fontSize: 18 }}>Unlock more of campus</div>
             <p className="muted" style={{ fontSize: 13, marginTop: 8, lineHeight: 1.45 }}>
-              Premium is optional. Career tools stay free. Premium unlocks extra privacy tools and Private Circle.
+              Premium is optional. Career tools stay free. Premium unlocks Private Circle and boosts.
             </p>
           </div>
         )}
 
         <div className="card stack" style={{ marginBottom: 14 }}>
           <div className="h2">What you get</div>
-          <p style={{ fontSize: 13 }}>• Private Circle — discreet campus connections (premium members only)</p>
+          <p style={{ fontSize: 13 }}>• Private Circle — discreet campus connections (members only)</p>
           <p style={{ fontSize: 13 }}>• Priority profile boost on Discover</p>
           <p style={{ fontSize: 13 }}>• Unlimited saves & advanced filters</p>
-          <p style={{ fontSize: 13 }}>• Premium badge on your public profile</p>
-          <p style={{ fontSize: 13 }}>• Early access to new campus features</p>
+          <p style={{ fontSize: 13 }}>• Premium badge on public profile</p>
+          <p style={{ fontSize: 13 }}>• Early access to new features</p>
         </div>
 
         {!active && (
@@ -108,9 +117,11 @@ export default function PremiumPage() {
               <p style={{ fontSize: 14 }}>Send <strong>₹{PLANS[plan].amount}</strong> to</p>
               <p style={{ fontSize: 18, fontWeight: 800, letterSpacing: 0.5 }}>{UPI_DISPLAY}</p>
               <p className="muted" style={{ fontSize: 12 }}>PhonePe / GPay / any UPI · number {UPI_NUMBER}</p>
-              <p className="muted" style={{ fontSize: 12 }}>
-                After paying, paste the UPI reference / UTR below. Admin verifies and activates within 24 hours.
-              </p>
+              <ol style={{ fontSize: 12, color: "var(--muted)", paddingLeft: 18, margin: "8px 0" }}>
+                <li>Pay exact amount on UPI</li>
+                <li>Copy UTR / UPI reference</li>
+                <li>Submit below · admin approves → Circle unlocks</li>
+              </ol>
               <div>
                 <span className="label">UPI ref / UTR *</span>
                 <input value={ref} onChange={(e) => setRef(e.target.value)} placeholder="e.g. 123456789012" />
