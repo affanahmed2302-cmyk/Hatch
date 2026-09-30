@@ -7,6 +7,7 @@ import {
   hasChatLock, setChatLockPin, clearChatLock, verifyPin, getDailyReminders, setDailyReminders,
 } from "@/lib/chatLock";
 import { ensureInviteCode, inviteUrl, trackEvent } from "@/lib/safety";
+import { EcosystemDrawerCard } from "@/components/EcosystemGateway";
 import Nav from "@/components/Nav";
 
 export default function SettingsPage() {
@@ -53,7 +54,10 @@ export default function SettingsPage() {
   }
 
   function copyInvite() {
-    navigator.clipboard?.writeText(inviteUrl(invite));
+    const url = inviteUrl(invite);
+    // Viral loop: ?ref= on signup
+    const withRef = url.includes("?") ? url + "&ref=" + invite : url + (url.includes("/signup") ? "?ref=" + invite : "?ref=" + invite);
+    navigator.clipboard?.writeText(withRef.includes("ref=") ? withRef : `${typeof window !== "undefined" ? window.location.origin : ""}/signup?ref=${invite}`);
     setMsg("Invite link copied — share on WhatsApp");
     if (userId) trackEvent(userId, "invite_copy", { code: invite });
   }
@@ -81,10 +85,14 @@ export default function SettingsPage() {
           </Link>
         )}
 
+        <EcosystemDrawerCard />
+
         <div className="card stack" style={{ marginBottom: 12 }}>
           <div className="h2">Invite friends</div>
-          <p className="muted" style={{ fontSize: 12 }}>Grow campus with your link</p>
-          <p style={{ fontSize: 13, wordBreak: "break-all" }}>{invite ? inviteUrl(invite) : "…"}</p>
+          <p className="muted" style={{ fontSize: 12 }}>Grow campus + national pods with your link</p>
+          <p style={{ fontSize: 13, wordBreak: "break-all" }}>
+            {invite ? `${typeof window !== "undefined" ? window.location.origin : ""}/signup?ref=${invite}` : "…"}
+          </p>
           <button className="btn btn-sm" onClick={copyInvite}>Copy invite link</button>
         </div>
 

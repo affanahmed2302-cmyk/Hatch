@@ -7,9 +7,15 @@ import {
   fetchBubbles, postBubble, fetchFreeNow, setFreeNow, fetchDailyRecap,
   haptic, playPing,
 } from "@/lib/obsession";
+import {
+  VIBE_OPTIONS, voteVibe, fetchVibeCounts, setStudyBeacon, fetchStudyBeacons,
+  postBounty, fetchBounties, bumpOpenStreak, streakTier, DEFAULT_EVENTS, eventCountdown,
+} from "@/lib/engagement";
+import { EcosystemPortalGrid } from "@/components/EcosystemGateway";
 import Nav from "@/components/Nav";
 
 const PLACES = ["Library", "Canteen", "Nescafe", "Quad", "Main gate"];
+const STUDY_SPOTS = ["Library", "Dept lab", "Hostel desk", "Quad", "Canteen table"];
 
 export default function HomePage() {
   const [myId, setMyId] = useState<string | null>(null);
@@ -23,16 +29,28 @@ export default function HomePage() {
   const [msg, setMsg] = useState("");
   const [err, setErr] = useState("");
   const [loading, setLoading] = useState(true);
+  const [vibeCounts, setVibeCounts] = useState<Record<string, number>>({});
+  const [beacons, setBeacons] = useState<any[]>([]);
+  const [bounties, setBounties] = useState<any[]>([]);
+  const [bountyTitle, setBountyTitle] = useState("");
+  const [streak, setStreak] = useState(0);
+  const [repFlash, setRepFlash] = useState(false);
+  const [myRep, setMyRep] = useState(0);
+  const [tick, setTick] = useState(0);
   const router = useRouter();
 
   async function refresh(uid: string) {
-    const [b, f, p, r] = await Promise.all([
+    const [b, f, p, r, vc, sb, mb] = await Promise.all([
       fetchBubbles(), fetchFreeNow(), fetchPulseFeed(), fetchDailyRecap(uid),
+      fetchVibeCounts(), fetchStudyBeacons(), fetchBounties(),
     ]);
     setBubbles(b);
     setFree(f);
     setPulse(p.ok ? p.data : []);
     setRecap(r);
+    setVibeCounts(vc);
+    setBeacons(sb);
+    setBounties(mb);
   }
 
   useEffect(() => {
@@ -41,6 +59,10 @@ export default function HomePage() {
       if (!user) { router.push("/login"); return; }
       setMyId(user.id);
       touchPresence(user.id);
+      const s = await bumpOpenStreak(user.id);
+      setStreak(s);
+      const { data: prof } = await supabase.from("profiles").select("rep_score").eq("id", user.id).maybeSingle();
+      setMyRep(prof?.rep_score || 0);
       await refresh(user.id);
       const key = "hatch_recap_" + new Date().toLocaleDateString("en-CA");
       if (!sessionStorage.getItem(key)) {
@@ -51,30 +73,70 @@ export default function HomePage() {
     })();
   }, [router]);
 
+  useEffect(() => {
+    const t = setInterval(() => setTick((x) => x + 1), 30000);
+    return () => clearInterval(t);
+  }, []);
+
   async function publishBubble() {
     if (!myId || !bubbleText.trim()) return;
-    const res = await postBubble(myId, bubbleText);
-    if (!res.ok) setErr(res.error || "Failed");
-    else { setBubbleText(""); setMsg("Bubble live 24h"); haptic(10); await refresh(myId); }
+    try {
+      const res = await postBubble(myId, bubbleText);
+      if (!res.ok) setErr(res.error || "Failed");
+      else { setBubbleText(""); setMsg("Bubble live 24h"); haptic(10); await refresh(myId); }
+    } catch (e: any) { setErr(e?.message || "Failed"); }
   }
 
   async function goFree(place: string) {
     if (!myId) return;
-    const res = await setFreeNow(myId, place);
-    if (!res.ok) setErr(res.error || "Failed");
-    else { setMsg("Free at " + place + " · 15 min"); haptic([10, 20, 10]); playPing(); await refresh(myId); }
+    try {
+      const res = await setFreeNow(myId, place);
+      if (!res.ok) setErr(res.error || "Failed");
+      else { setMsg("Free at " + place + " · 15 min"); haptic([10, 20, 10]); playPing(); await refresh(myId); }
+    } catch (e: any) { setErr(e?.message || "Failed"); }
   }
 
   async function publishPulse() {
     if (!myId || !pulseText.trim()) return;
-    const res = await postPulse(myId, pulseText);
-    if (!res.ok) setErr(res.error || "Failed");
-    else { setPulseText(""); setMsg("Posted"); haptic(8); await refresh(myId); }
+    try {
+      const res = await postPulse(myId, pulseText);
+      if (!res.ok) setErr(res.error || "Failed");
+      else { setPulseText(""); setMsg("Posted"); haptic(8); await refresh(myId); }
+    } catch (e: any) { setErr(e?.message || "Failed"); }
+  }
+
+  async function onVibe(choice: string) {
+    if (!myId) return;
+    const res = await voteVibe(myId, choice);
+    if (!res.ok) setErr(res.error || "Vote failed — run hatch_growth.sql");
+    else { setMsg("Vibe logged"); haptic(8); setVibeCounts(await fetchVibeCounts()); }
+  }
+
+  async function onBeacon(place: string) {
+    if (!myId) return;
+    const res = await setStudyBeacon(myId, place);
+    if (!res.ok) setErr(res.error || "Beacon failed — run hatch_growth.sql");
+    else { setMsg("Beacon on · 1 hour"); haptic(10); setBeacons(await fetchStudyBeacons()); }
+  }
+
+  async function onBounty() {
+    if (!myId || !bountyTitle.trim()) return;
+    const res = await postBounty(myId, bountyTitle, 50);
+    if (!res.ok) setErr(res.error || "Failed — run hatch_growth.sql");
+    else { setBountyTitle(""); setMsg("Bounty live 24h"); setBounties(await fetchBounties()); }
+  }
+
+  function flashRep() {
+    setRepFlash(true);
+    setTimeout(() => setRepFlash(false), 1200);
   }
 
   if (loading) return <div className="shell" style={{ display: "flex", alignItems: "center", justifyContent: "center" }}><span className="muted">Loading...</span></div>;
 
   const pulseList = Array.isArray(pulse) ? pulse : [];
+  const tickerText = pulseList.slice(0, 8).map((p: any) => p.content).join("  ·  ") || "Be the first pulse of the day…";
+  const tier = streakTier(streak);
+  void tick; // refresh countdowns
 
   return (
     <div className="shell">
@@ -95,13 +157,116 @@ export default function HomePage() {
 
       <div className="topbar">
         <div className="logo">HATCH</div>
-        <Link href="/leaderboard" className="btn-ghost btn-sm" style={{ marginLeft: "auto" }}>Ranks</Link>
+        <button type="button" className="btn-ghost btn-sm" onClick={flashRep} style={{ marginLeft: "auto" }}>
+          {repFlash ? `+rep ⚡` : `${myRep} rep`}
+        </button>
+        <Link href="/leaderboard" className="btn-ghost btn-sm">Ranks</Link>
       </div>
 
       <div className="page">
         {msg && <div className="ok" style={{ marginBottom: 10 }}>{msg}</div>}
         {err && <div className="fail" style={{ marginBottom: 10 }}>{err}</div>}
 
+        {/* 4 · Campus streak flame */}
+        <div className="card row" style={{ marginBottom: 10, gap: 10, alignItems: "center",
+          background: streak >= 3 ? "linear-gradient(135deg,rgba(251,146,60,0.2),rgba(239,68,68,0.1))" : undefined }}>
+          <span style={{ fontSize: 22 }}>{tier.emoji}</span>
+          <div style={{ flex: 1 }}>
+            <div style={{ fontWeight: 800, fontSize: 14 }}>{streak}-day open streak</div>
+            <p className="muted" style={{ fontSize: 11 }}>{tier.label} · open Hatch daily</p>
+          </div>
+        </div>
+
+        {/* 3 · BMSCE Tea Ticker */}
+        <div className="card" style={{ marginBottom: 10, padding: "10px 12px", overflow: "hidden" }}>
+          <div className="muted" style={{ fontSize: 10, marginBottom: 4, fontWeight: 700 }}>TEA TICKER</div>
+          <div style={{ whiteSpace: "nowrap", overflow: "hidden" }}>
+            <span style={{
+              display: "inline-block", fontSize: 12,
+              animation: "hatch-marquee 28s linear infinite",
+            }}>{tickerText} · {tickerText}</span>
+          </div>
+        </div>
+
+        {/* 7 · Who's skipping / free now count */}
+        <div className="card row" style={{ marginBottom: 10, gap: 8, alignItems: "center" }}>
+          <div style={{ flex: 1 }}>
+            <div style={{ fontWeight: 700, fontSize: 13 }}>Free now</div>
+            <p className="muted" style={{ fontSize: 11 }}>{free.length} student{free.length === 1 ? "" : "s"} · 15 min windows</p>
+          </div>
+          <span className="badge">{free.length}</span>
+        </div>
+
+        {/* 1 · Flash Vibe Check */}
+        <div className="card" style={{ marginBottom: 10 }}>
+          <div className="h2" style={{ marginBottom: 8, fontSize: 14 }}>Flash vibe · today</div>
+          <div className="row" style={{ gap: 6, flexWrap: "wrap" }}>
+            {VIBE_OPTIONS.map((v) => (
+              <button key={v.id} className="btn-ghost btn-sm" onClick={() => onVibe(v.id)}>
+                {v.label}{vibeCounts[v.id] ? ` · ${vibeCounts[v.id]}` : ""}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* 2 · 1-Hour Study Beacon */}
+        <div className="card" style={{ marginBottom: 10 }}>
+          <div className="h2" style={{ marginBottom: 8, fontSize: 14 }}>Study beacon · 1h</div>
+          <div className="row" style={{ gap: 6, flexWrap: "wrap", marginBottom: 8 }}>
+            {STUDY_SPOTS.map((p) => (
+              <button key={p} className="btn-ghost btn-sm" onClick={() => onBeacon(p)}>{p}</button>
+            ))}
+          </div>
+          {beacons.slice(0, 5).map((b: any) => (
+            <p key={b.id} style={{ fontSize: 12, marginBottom: 4 }}>
+              <strong>{displayName(b.profile || {})}</strong>
+              <span className="muted"> · {b.place}</span>
+            </p>
+          ))}
+        </div>
+
+        {/* 8 · Club event countdown */}
+        <div className="card" style={{ marginBottom: 10 }}>
+          <div className="h2" style={{ marginBottom: 8, fontSize: 14 }}>Campus countdowns</div>
+          {DEFAULT_EVENTS.map((ev) => (
+            <div key={ev.id} className="row" style={{ marginBottom: 6, alignItems: "center" }}>
+              <span style={{ flex: 1, fontSize: 13 }}>{ev.name}</span>
+              <span className="badge">{eventCountdown(ev.at)}</span>
+            </div>
+          ))}
+        </div>
+
+        {/* 9 · Ecosystem portal grid */}
+        <div className="card" style={{ marginBottom: 10 }}>
+          <div className="h2" style={{ marginBottom: 8, fontSize: 14 }}>Ecosystem</div>
+          <EcosystemPortalGrid compact />
+        </div>
+
+        {/* 5 · Micro-bounty board */}
+        <div className="card" style={{ marginBottom: 10 }}>
+          <div className="h2" style={{ marginBottom: 8, fontSize: 14 }}>Micro-bounties</div>
+          <div className="row" style={{ gap: 8, marginBottom: 8 }}>
+            <input value={bountyTitle} onChange={(e) => setBountyTitle(e.target.value)} placeholder="Need lab slot swap…" maxLength={120} style={{ flex: 1 }} />
+            <button className="btn btn-sm" onClick={onBounty}>Post</button>
+          </div>
+          {bounties.slice(0, 5).map((b: any) => (
+            <p key={b.id} style={{ fontSize: 12, marginBottom: 4 }}>
+              {b.title}{b.reward_inr ? ` · ₹${b.reward_inr}` : ""}
+            </p>
+          ))}
+          {!bounties.length && <p className="muted" style={{ fontSize: 11 }}>No open bounties</p>}
+        </div>
+
+        {/* 6 · AI icebreaker shortcut into discover */}
+        <Link href="/discover" className="card" style={{
+          display: "block", marginBottom: 10, textDecoration: "none", color: "inherit",
+          border: "1px solid rgba(167,139,250,0.4)",
+        }}>
+          <div style={{ fontWeight: 800, fontSize: 14 }}>AI icebreakers on Match</div>
+          <p className="muted" style={{ fontSize: 11, marginTop: 2 }}>Open Discover → empty chats get 1-tap starters</p>
+        </Link>
+
+        {/* 10 · Rep flash is topbar; Lounge CTA */}
         <Link
           href="/lounge"
           className="card"
@@ -194,6 +359,7 @@ export default function HomePage() {
         </div>
       </div>
       <Nav />
+      <style>{`@keyframes hatch-marquee { from { transform: translateX(0); } to { transform: translateX(-50%); } }`}</style>
     </div>
   );
 }
