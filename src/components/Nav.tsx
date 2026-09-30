@@ -5,16 +5,17 @@ import { usePathname } from "next/navigation";
 const items = [
   { href: "/home", label: "Home", icon: "⌂" },
   { href: "/discover", label: "Match", icon: "◎" },
+  { href: "/lounge", label: "Lounge", icon: "#" },
   { href: "/inbox", label: "Inbox", icon: "◇" },
-  { href: "/teams", label: "Teams", icon: "△" },
   { href: "/profile", label: "You", icon: "●" },
 ];
 
 export default function Nav() {
   const path = usePathname();
-  // Hide nav on pure chat / lounge full-screen flows if needed later
   const hide =
     path.startsWith("/chat/") ||
+    path === "/lounge" ||
+    path.startsWith("/lounge/") ||
     path.startsWith("/login") ||
     path.startsWith("/signup") ||
     path.startsWith("/onboarding");
