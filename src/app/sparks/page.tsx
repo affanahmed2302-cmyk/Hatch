@@ -2,14 +2,15 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { supabase, displayName, yearToLabel } from "@/lib/supabase";
+import { supabase, displayName, yearToLabel, isSuperAdmin } from "@/lib/supabase";
 import { isFeatureOn } from "@/lib/features";
 import Nav from "@/components/Nav";
 
-/** Discreet Campus Sparks — only reachable when feature_sparks is ON */
+/** Campus Sparks — students need feature flag ON; super-admin always allowed */
 export default function SparksPage() {
   const [userId, setUserId] = useState<string | null>(null);
   const [enabled, setEnabled] = useState(false);
+  const [isAdmin, setIsAdmin] = useState(false);
   const [consent, setConsent] = useState(false);
   const [headline, setHeadline] = useState("");
   const [vibe, setVibe] = useState("");
@@ -24,9 +25,12 @@ export default function SparksPage() {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) { router.push("/login"); return; }
       setUserId(user.id);
+      const admin = isSuperAdmin(user.email);
+      setIsAdmin(admin);
       const on = await isFeatureOn("feature_sparks");
-      setEnabled(on);
-      if (!on) { setLoading(false); return; }
+      const canUse = on || admin;
+      setEnabled(canUse);
+      if (!canUse) { setLoading(false); return; }
 
       const { data: mine } = await supabase.from("sparks_profiles").select("*").eq("user_id", user.id).maybeSingle();
       if (mine) {
@@ -87,9 +91,9 @@ export default function SparksPage() {
           <div className="card">
             <div className="h2">Not available</div>
             <p className="muted" style={{ fontSize: 13, marginTop: 8 }}>
-              This module is turned off by admin. Hatch core stays career & campus networking.
+              This module is turned off. Super-admin can enable it from CEO Pilot.
             </p>
-            <Link href="/home" className="btn" style={{ display: "block", textAlign: "center", marginTop: 12 }}>Back to Home</Link>
+            <Link href="/pilot" className="btn" style={{ display: "block", textAlign: "center", marginTop: 12 }}>Open Pilot</Link>
           </div>
         </div>
         <Nav />
@@ -100,10 +104,15 @@ export default function SparksPage() {
   return (
     <div className="shell">
       <div className="topbar">
-        <Link href="/settings" className="btn-ghost btn-sm">←</Link>
+        <Link href={isAdmin ? "/pilot" : "/settings"} className="btn-ghost btn-sm">←</Link>
         <div className="logo" style={{ fontSize: 14 }}>Campus Sparks</div>
       </div>
       <div className="page">
+        {isAdmin && (
+          <div className="card" style={{ marginBottom: 10, border: "1px solid rgba(167,139,250,0.4)" }}>
+            <p style={{ fontSize: 12 }}>Admin preview · students only see this when Sparks kill-switch is ON</p>
+          </div>
+        )}
         <div className="card" style={{ marginBottom: 12, background: "linear-gradient(135deg,rgba(236,72,153,0.12),rgba(139,92,246,0.08))" }}>
           <p style={{ fontSize: 13, fontWeight: 700 }}>Optional · private · consent first</p>
           <p className="muted" style={{ fontSize: 12, marginTop: 4 }}>
