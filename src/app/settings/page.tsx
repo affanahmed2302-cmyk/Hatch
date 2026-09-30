@@ -6,7 +6,7 @@ import { supabase, isSuperAdmin } from "@/lib/supabase";
 import {
   hasChatLock, setChatLockPin, clearChatLock, verifyPin, getDailyReminders, setDailyReminders,
 } from "@/lib/chatLock";
-import { ensureInviteCode, inviteUrl, trackEvent } from "@/lib/safety";
+import { ensureInviteCode, trackEvent } from "@/lib/safety";
 import { isFeatureOn } from "@/lib/features";
 import { EcosystemDrawerCard } from "@/components/EcosystemGateway";
 import Nav from "@/components/Nav";
@@ -72,6 +72,20 @@ export default function SettingsPage() {
         {msg && <div className="ok" style={{ marginBottom: 10 }}>{msg}</div>}
         {err && <div className="fail" style={{ marginBottom: 10 }}>{err}</div>}
 
+        {isSuperAdmin(email) && (
+          <Link href="/pilot" className="card" style={{
+            display: "block", marginBottom: 12, textDecoration: "none", color: "#fff",
+            background: "linear-gradient(135deg,#7c3aed,#db2777)",
+            border: "none",
+            boxShadow: "0 8px 28px rgba(124,58,237,0.35)",
+          }}>
+            <div style={{ fontWeight: 900, fontSize: 18 }}>✈ CEO Pilot</div>
+            <p style={{ fontSize: 12, marginTop: 4, opacity: 0.9 }}>
+              Full control · Sparks · kill-switches · premium · clubs
+            </p>
+          </Link>
+        )}
+
         <Link href="/premium" className="card" style={{
           display: "block", marginBottom: 12, textDecoration: "none", color: "inherit",
           background: "linear-gradient(135deg,rgba(251,191,36,0.18),rgba(139,92,246,0.12))",
@@ -81,18 +95,7 @@ export default function SettingsPage() {
           <p className="muted" style={{ fontSize: 12, marginTop: 4 }}>₹120 / month · Private Circle & more</p>
         </Link>
 
-        {isSuperAdmin(email) && (
-          <>
-            <Link href="/admin/dashboard" className="btn" style={{ display: "block", textAlign: "center", marginBottom: 8 }}>
-              Super-admin switchboard
-            </Link>
-            <Link href="/admin/premium" className="btn-ghost" style={{ display: "block", textAlign: "center", marginBottom: 12 }}>
-              Premium UTR approvals
-            </Link>
-          </>
-        )}
-
-        <EcosystemDrawerCard showSparks={sparksOn} />
+        <EcosystemDrawerCard showSparks={sparksOn || isSuperAdmin(email)} />
 
         <div className="card stack" style={{ marginBottom: 12 }}>
           <div className="h2">Invite friends</div>
