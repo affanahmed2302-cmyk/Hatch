@@ -9,19 +9,10 @@ import { EcosystemPortalGrid } from "@/components/EcosystemGateway";
 import MidnightBlackout from "@/components/MidnightBlackout";
 import Nav from "@/components/Nav";
 
-const TOOLS = [
-  { href: "/radar", title: "Quantum Radar", blurb: "Nearby intents · burner chats", tag: "Local" },
-  { href: "/ghost", title: "Ghost Teammate", blurb: "AI squad for hackathons", tag: "AI" },
-  { href: "/teams", title: "Teams", blurb: "Find project teammates", tag: "Build" },
-  { href: "/clubs", title: "Clubs", blurb: "Campus clubs & join", tag: "Campus" },
-  { href: "/leaderboard", title: "Leaderboard", blurb: "Rep & college ranks", tag: "Social" },
-  { href: "/premium", title: "Premium", blurb: "Private Circle · ₹120", tag: "Pro" },
-];
-
 export default function ExplorePage() {
   const [uid, setUid] = useState<string | null>(null);
   const [email, setEmail] = useState("");
-  const [sparks, setSparks] = useState(false);
+  const [sparksFlag, setSparksFlag] = useState(true);
   const [loading, setLoading] = useState(true);
   const router = useRouter();
 
@@ -31,17 +22,15 @@ export default function ExplorePage() {
       if (!user) { router.push("/login"); return; }
       setUid(user.id);
       setEmail(user.email || "");
-      setSparks(await isFeatureOn("feature_sparks") || isSuperAdmin(user.email));
+      // Sparks is always marketed; paywall is inside the app
+      setSparksFlag(true);
+      void isFeatureOn("feature_sparks");
       setLoading(false);
     })();
   }, [router]);
 
   if (loading) {
-    return (
-      <div className="shell" style={{ display: "flex", alignItems: "center", justifyContent: "center" }}>
-        <span className="muted">…</span>
-      </div>
-    );
+    return <div className="shell" style={{ display: "flex", alignItems: "center", justifyContent: "center" }}><span className="muted">…</span></div>;
   }
 
   return (
@@ -52,56 +41,67 @@ export default function ExplorePage() {
       </div>
       <div className="page">
         <p className="muted" style={{ fontSize: 13, marginBottom: 14 }}>
-          Extra tools live here so Home stays simple.
+          Premium experiences & campus tools.
         </p>
 
-        <MidnightBlackout userId={uid} />
+        <Link href="/sparks" className="card" style={{
+          display: "block", marginBottom: 10, textDecoration: "none", color: "inherit",
+          background: "linear-gradient(135deg,rgba(236,72,153,0.22),rgba(124,58,237,0.15))",
+          border: "1px solid rgba(244,114,182,0.45)",
+        }}>
+          <div style={{ fontWeight: 900, fontSize: 17 }}>Campus Sparks · Dating</div>
+          <p className="muted" style={{ fontSize: 12, marginTop: 4 }}>
+            Swipe · match · chat · BMSCE only · <strong>₹150/month</strong>
+          </p>
+        </Link>
 
+        <Link href="/legends" className="card" style={{
+          display: "block", marginBottom: 10, textDecoration: "none", color: "inherit",
+          background: "linear-gradient(135deg,rgba(251,191,36,0.2),rgba(120,53,15,0.2))",
+          border: "1px solid rgba(251,191,36,0.45)",
+        }}>
+          <div style={{ fontWeight: 900, fontSize: 17 }}>Legends of BMSCE</div>
+          <p className="muted" style={{ fontSize: 12, marginTop: 4 }}>
+            Private society chatbox · <strong>₹999/month</strong>
+          </p>
+        </Link>
+
+        <Link href="/install" className="card" style={{
+          display: "block", marginBottom: 12, textDecoration: "none", color: "inherit",
+        }}>
+          <div style={{ fontWeight: 800 }}>Install Hatch on phone</div>
+          <p className="muted" style={{ fontSize: 12 }}>Add to Home Screen · works like an app</p>
+        </Link>
+
+        <MidnightBlackout userId={uid} />
         {!isMidnightBlackout() && (
           <p className="muted" style={{ fontSize: 11, marginBottom: 12 }}>{blackoutCountdown()}</p>
         )}
 
-        <div className="stack" style={{ marginBottom: 16 }}>
-          {TOOLS.map((t) => (
-            <Link key={t.href} href={t.href} className="card" style={{
-              display: "block", textDecoration: "none", color: "inherit", marginBottom: 0,
-            }}>
-              <div className="row">
-                <div style={{ flex: 1 }}>
-                  <div style={{ fontWeight: 700, fontSize: 15 }}>{t.title}</div>
-                  <p className="muted" style={{ fontSize: 12, marginTop: 2 }}>{t.blurb}</p>
-                </div>
-                <span className="badge">{t.tag}</span>
-              </div>
-            </Link>
-          ))}
+        {[
+          { href: "/radar", title: "Quantum Radar", blurb: "Nearby intents · burner chats" },
+          { href: "/ghost", title: "Ghost Teammate", blurb: "AI hackathon squad" },
+          { href: "/teams", title: "Teams", blurb: "Project teammates" },
+          { href: "/clubs", title: "Clubs", blurb: "Campus clubs" },
+          { href: "/leaderboard", title: "Leaderboard", blurb: "Rep ranks" },
+          { href: "/premium", title: "Hatch Premium", blurb: "₹120 · Private Circle" },
+        ].map((t) => (
+          <Link key={t.href} href={t.href} className="card" style={{
+            display: "block", marginBottom: 8, textDecoration: "none", color: "inherit",
+          }}>
+            <div style={{ fontWeight: 700 }}>{t.title}</div>
+            <p className="muted" style={{ fontSize: 12 }}>{t.blurb}</p>
+          </Link>
+        ))}
 
-          {sparks && (
-            <Link href="/sparks" className="card" style={{
-              display: "block", textDecoration: "none", color: "inherit",
-              border: "1px solid rgba(236,72,153,0.35)",
-            }}>
-              <div style={{ fontWeight: 700, fontSize: 15 }}>Campus Sparks</div>
-              <p className="muted" style={{ fontSize: 12 }}>Private dating mini-app</p>
-            </Link>
-          )}
+        {isSuperAdmin(email) && (
+          <div className="stack" style={{ marginTop: 12 }}>
+            <Link href="/pilot" className="btn" style={{ textAlign: "center" }}>CEO Pilot</Link>
+            <Link href="/pilot/commerce" className="btn-ghost" style={{ textAlign: "center" }}>Coupons & payments</Link>
+          </div>
+        )}
 
-          {(isSuperAdmin(email)) && (
-            <>
-              <Link href="/pilot" className="card" style={{
-                display: "block", textDecoration: "none", color: "#fff",
-                background: "linear-gradient(135deg,#7c3aed,#db2777)",
-              }}>
-                <div style={{ fontWeight: 800 }}>CEO Pilot</div>
-                <p style={{ fontSize: 12, opacity: 0.9 }}>Admin only</p>
-              </Link>
-              <Link href="/clubs-hq" className="btn-ghost" style={{ textAlign: "center" }}>Clubs HQ</Link>
-              <Link href="/club-portal" className="btn-ghost" style={{ textAlign: "center" }}>Club Portal</Link>
-            </>
-          )}
-        </div>
-
-        <div className="card">
+        <div className="card" style={{ marginTop: 14 }}>
           <div className="h2" style={{ marginBottom: 8 }}>Outside links</div>
           <EcosystemPortalGrid compact />
         </div>
