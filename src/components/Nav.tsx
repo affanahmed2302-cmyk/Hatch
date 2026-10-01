@@ -4,9 +4,9 @@ import { usePathname } from "next/navigation";
 
 const items = [
   { href: "/home", label: "Home", icon: "⌂" },
-  { href: "/discover", label: "Match", icon: "◎" },
+  { href: "/discover", label: "People", icon: "◎" },
   { href: "/lounge", label: "Lounge", icon: "#" },
-  { href: "/inbox", label: "Inbox", icon: "◇" },
+  { href: "/inbox", label: "Chat", icon: "◇" },
   { href: "/profile", label: "You", icon: "●" },
 ];
 
@@ -31,10 +31,13 @@ export default function Nav() {
           path === it.href ||
           (it.href !== "/home" && path.startsWith(it.href + "/"));
         return (
-          <Link key={it.href} href={it.href} className={on ? "on" : ""} aria-current={on ? "page" : undefined}>
-            <span className="nav-icon" aria-hidden>
-              {it.icon}
-            </span>
+          <Link
+            key={it.href}
+            href={it.href}
+            className={on ? "on" : ""}
+            aria-current={on ? "page" : undefined}
+          >
+            <span className="nav-icon" aria-hidden>{it.icon}</span>
             {it.label}
           </Link>
         );
