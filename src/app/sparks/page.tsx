@@ -77,7 +77,7 @@ export default function SparksDiscoverPage() {
         <div className="page">
           <div className="card" style={{ marginBottom: 12 }}>
             <div style={{ fontWeight: 900, fontSize: 20 }}>Campus Sparks</div>
-            <p className="muted" style={{ fontSize: 13, marginTop: 8 }}>Secondary dating layer · campus only</p>
+            <p className="muted" style={{ fontSize: 13, marginTop: 8 }}>Campus dating · not LinkedIn</p>
           </div>
           {userId && (
             <Paywall
@@ -98,6 +98,7 @@ export default function SparksDiscoverPage() {
   }
 
   const card = deck[idx];
+  const g = card?.gender || card?.profile?.gender;
 
   return (
     <div className="shell" style={{ background: "#0a0610" }}>
@@ -117,7 +118,7 @@ export default function SparksDiscoverPage() {
             background: "linear-gradient(135deg,rgba(236,72,153,0.35),rgba(124,58,237,0.25))",
             border: "1px solid #f472b6",
           }}>
-            <div style={{ fontWeight: 900, fontSize: 18 }}>It&apos;s a match!</div>
+            <div style={{ fontWeight: 900, fontSize: 18 }}>It's a match!</div>
             <p className="muted" style={{ fontSize: 13 }}>You and {matchFlash}</p>
             <Link href="/sparks/matches" className="btn btn-sm" style={{ marginTop: 8 }}>See matches</Link>
           </div>
@@ -125,12 +126,12 @@ export default function SparksDiscoverPage() {
         {!card ? (
           <div className="empty" style={{ padding: 40 }}>
             <p style={{ fontWeight: 800 }}>No more profiles</p>
-            <Link href="/sparks/me" className="btn" style={{ marginTop: 12 }}>Edit Sparks profile</Link>
+            <Link href="/sparks/me" className="btn" style={{ marginTop: 12 }}>Edit dating profile</Link>
           </div>
         ) : (
           <div className="card" style={{ padding: 0, overflow: "hidden", marginBottom: 14, border: "1px solid rgba(244,114,182,0.35)" }}>
             <div style={{
-              height: 300,
+              height: 320,
               background: card.profile?.avatar_url
                 ? `url(${card.profile.avatar_url}) center/cover`
                 : "linear-gradient(160deg,#be185d,#4c1d95)",
@@ -138,14 +139,15 @@ export default function SparksDiscoverPage() {
             <div style={{ padding: 16 }}>
               <div style={{ fontWeight: 900, fontSize: 22 }}>{displayName(card.profile || {})}</div>
               <p className="muted" style={{ fontSize: 13, marginTop: 4 }}>
+                {g ? `${g} · ` : ""}
                 {card.profile?.department}
                 {card.profile?.year ? ` · ${yearToLabel(card.profile.year)}` : ""}
               </p>
-              {card.headline && <p style={{ fontSize: 15, marginTop: 10, fontWeight: 600 }}>{card.headline}</p>}
-              {card.vibe && <p className="muted" style={{ fontSize: 13 }}>Vibe · {card.vibe}</p>}
-              {card.looking_for && <p className="muted" style={{ fontSize: 13 }}>Looking · {card.looking_for}</p>}
-              {card.meet_pref && <p className="muted" style={{ fontSize: 13 }}>Meetup · {card.meet_pref}</p>}
-              {card.prompts && <p style={{ fontSize: 13, marginTop: 8 }}>{card.prompts}</p>}
+              {card.headline && <p style={{ fontSize: 16, marginTop: 10, fontWeight: 600 }}>{card.headline}</p>}
+              {card.vibe && <p style={{ fontSize: 13, marginTop: 6 }}>✨ {card.vibe}</p>}
+              {card.looking_for && <p style={{ fontSize: 13, marginTop: 4 }}>💘 Looking · {card.looking_for}</p>}
+              {card.meet_pref && <p style={{ fontSize: 13, marginTop: 4 }}>📍 Meet · {card.meet_pref}</p>}
+              {card.prompts && <p style={{ fontSize: 13, marginTop: 10, opacity: 0.9 }}>{card.prompts}</p>}
             </div>
           </div>
         )}
