@@ -1,28 +1,36 @@
 import { supabase } from './supabase'
 
-/** Local IST-ish window: 00:00–00:15 device local time */
+/** 12:00 AM – 3:00 AM local device time */
 export function isMidnightBlackout(now = new Date()): boolean {
   const h = now.getHours()
-  const m = now.getMinutes()
-  return h === 0 && m < 15
+  return h >= 0 && h < 3
 }
 
 export function blackoutCountdown(now = new Date()): string {
   if (isMidnightBlackout(now)) {
-    const left = 15 - now.getMinutes()
-    return `${left}m left in blackout`
+    const end = new Date(now)
+    end.setHours(3, 0, 0, 0)
+    const ms = end.getTime() - now.getTime()
+    const h = Math.floor(ms / 3600000)
+    const m = Math.floor((ms % 3600000) / 60000)
+    return `${h}h ${m}m left · closes 3 AM`
   }
   const next = new Date(now)
-  next.setHours(24, 0, 0, 0)
+  if (now.getHours() >= 3) next.setDate(next.getDate() + 1)
+  next.setHours(0, 0, 0, 0)
   const ms = next.getTime() - now.getTime()
   const h = Math.floor(ms / 3600000)
   const m = Math.floor((ms % 3600000) / 60000)
-  return `Blackout in ${h}h ${m}m`
+  return `Opens in ${h}h ${m}m · 12 AM–3 AM`
 }
 
 export function tonightKey(now = new Date()): string {
-  // drops after midnight belong to "that night" calendar date
-  return now.toLocaleDateString('en-CA')
+  // Night of calendar date when window started (after midnight still same "night")
+  const d = new Date(now)
+  if (d.getHours() < 3) {
+    // still previous calendar night's session started at midnight
+  }
+  return d.toLocaleDateString('en-CA')
 }
 
 export async function postMidnightDrop(
@@ -31,7 +39,7 @@ export async function postMidnightDrop(
   kind: 'confession' | 'project' | 'pulse' = 'confession'
 ) {
   if (!isMidnightBlackout()) {
-    return { ok: false as const, error: 'Only live 12:00–12:15 AM local' }
+    return { ok: false as const, error: 'Only live 12:00 AM – 3:00 AM' }
   }
   const t = body.trim().slice(0, 280)
   if (t.length < 3) return { ok: false as const, error: 'Too short' }
@@ -56,11 +64,107 @@ export async function fetchMidnightDrops() {
       .select('id, body, kind, created_at')
       .eq('drop_night', tonightKey())
       .order('created_at', { ascending: false })
-      .limit(40)
+      .limit(50)
     return data || []
   } catch {
     return []
   }
+}
+
+/** Directed secret confession — target never sees your name until mutual reveal */
+export async function sendSecretConfession(fromId: string, toId: string, body: string) {
+  if (!isMidnightBlackout()) {
+    return { ok: false as const, error: 'Secret confessions only 12 AM – 3 AM' }
+  }
+  if (fromId === toId) return { ok: false as const, error: 'Cannot confess to yourself' }
+  const t = body.trim().slice(0, 400)
+  if (t.length < 5) return { ok: false as const, error: 'Write a bit more' }
+  try {
+    const { error } = await supabase.from('secret_confessions').insert({
+      from_id: fromId,
+      to_id: toId,
+      body: t,
+      night_key: tonightKey(),
+      status: 'pending',
+    })
+    if (error) return { ok: false as const, error: error.message }
+    return { ok: true as const, error: null }
+  } catch (e: any) {
+    return { ok: false as const, error: e?.message || 'Failed' }
+  }
+}
+
+export async function myIncomingSecrets(userId: string) {
+  try {
+    const { data } = await supabase
+      .from('secret_confessions')
+      .select('id, body, status, from_revealed, to_interested, to_revealed, created_at, from_id')
+      .eq('to_id', userId)
+      .order('created_at', { ascending: false })
+      .limit(30)
+    return data || []
+  } catch {
+    return []
+  }
+}
+
+export async function myOutgoingSecrets(userId: string) {
+  try {
+    const { data } = await supabase
+      .from('secret_confessions')
+      .select('id, body, status, from_revealed, to_interested, to_revealed, created_at, to_id')
+      .eq('from_id', userId)
+      .order('created_at', { ascending: false })
+      .limit(20)
+    return data || []
+  } catch {
+    return []
+  }
+}
+
+/** Target: "I'm curious" — still no names */
+export async function markSecretInterested(confessionId: string, userId: string) {
+  const { error } = await supabase
+    .from('secret_confessions')
+    .update({ to_interested: true, status: 'interested' })
+    .eq('id', confessionId)
+    .eq('to_id', userId)
+  if (error) return { ok: false as const, error: error.message }
+  return { ok: true as const, error: null }
+}
+
+/** Either side can offer reveal; names only show when BOTH revealed */
+export async function offerReveal(confessionId: string, userId: string) {
+  const { data: row } = await supabase
+    .from('secret_confessions')
+    .select('*')
+    .eq('id', confessionId)
+    .maybeSingle()
+  if (!row) return { ok: false as const, error: 'Not found', mutual: false }
+
+  const patch: Record<string, unknown> = {}
+  if (row.from_id === userId) patch.from_revealed = true
+  else if (row.to_id === userId) patch.to_revealed = true
+  else return { ok: false as const, error: 'Not yours', mutual: false }
+
+  const fromR = row.from_id === userId ? true : row.from_revealed
+  const toR = row.to_id === userId ? true : row.to_revealed
+  if (fromR && toR) patch.status = 'mutual'
+
+  const { error } = await supabase.from('secret_confessions').update(patch).eq('id', confessionId)
+  if (error) return { ok: false as const, error: error.message, mutual: false }
+  return { ok: true as const, error: null, mutual: !!(fromR && toR) }
+}
+
+export async function resolveConfessionPeer(confession: any, myId: string) {
+  if (!confession.from_revealed || !confession.to_revealed) return null
+  const peerId = confession.from_id === myId ? confession.to_id : confession.from_id
+  const { data } = await supabase
+    .from('profiles')
+    .select('id, full_name, username, avatar_url, department')
+    .eq('id', peerId)
+    .maybeSingle()
+  return data
 }
 
 export const RADAR_INTENTS = [
@@ -207,7 +311,6 @@ function jaccard(a: Set<string>, b: Set<string>) {
   return inter / (a.size + b.size - inter)
 }
 
-/** Offline-capable squad suggestion from profile metadata */
 export async function negotiateGhostSquad(forUserId: string) {
   try {
     const { data: me } = await supabase
