@@ -31,12 +31,10 @@ export function notifyUser(title: string, body: string, opts?: { url?: string; t
   } catch { /* ignore */ }
 
   try {
-    // vibrate for mobile
     if (navigator.vibrate) navigator.vibrate([40, 30, 40, 30, 80]);
   } catch { /* ignore */ }
 
   try {
-    // short beep via Web Audio
     const Ctx = window.AudioContext || (window as any).webkitAudioContext;
     if (!Ctx) return;
     const ctx = new Ctx();
@@ -52,6 +50,7 @@ export function notifyUser(title: string, body: string, opts?: { url?: string; t
   } catch { /* ignore */ }
 }
 
+/** Icebreakers adapt to peer + wherever they are free (Library, Canteen, Quad, etc.) */
 export function campusIcebreakers(peer: {
   full_name?: string | null
   department?: string | null
@@ -61,15 +60,21 @@ export function campusIcebreakers(peer: {
 }, freePlace?: string | null): string[] {
   const name = (peer.full_name || "").split(" ")[0] || "there";
   const dept = peer.department || "campus";
+  const intent = peer.intent || peer.career_goal || "a project";
   const lines: string[] = [];
 
   if (freePlace) {
     lines.push(`Hey ${name} — saw you're at ${freePlace}. Mind if I join in 10 mins?`);
-    lines.push(`Heading to ${freePlace} too — want company?`);
+    lines.push(`I'm around campus — want to meet at ${freePlace}?`);
+    lines.push(`Ping from Hatch — free near ${freePlace}? Quick chat?`);
   }
-  lines.push(`Hi ${name}! ${dept} here — free for a quick chat about ${peer.intent || peer.career_goal || "a project"}?`);
-  lines.push(`Hey — need a study / lab buddy this week. You free?`);
-  lines.push(`Hi! Saw your profile — what's one thing you're working on right now?`);
-  lines.push(`Nescafe or library — where do you usually grind?`);
+
+  lines.push(`Hi ${name}! ${dept} here — free for a quick chat about ${intent}?`);
+  lines.push(`Hey — looking for a study / lab buddy this week. You free?`);
+  lines.push(`Hi! What's one thing you're working on right now?`);
+  if (!freePlace) {
+    lines.push(`Where do you usually hang on campus — library, canteen, or elsewhere?`);
+  }
+
   return lines.slice(0, 5);
 }
