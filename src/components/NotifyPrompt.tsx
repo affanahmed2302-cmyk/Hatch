@@ -1,19 +1,34 @@
 "use client";
 import { useEffect, useState } from "react";
+import { usePathname } from "next/navigation";
 import { ensureNotifyPermission } from "@/lib/notify";
 import { registerPushSubscription } from "@/lib/pushClient";
 import { supabase } from "@/lib/supabase";
 
+const PUBLIC_PATHS = ["/", "/login", "/signup", "/terms"];
+
 export default function NotifyPrompt() {
   const [show, setShow] = useState(false);
+  const path = usePathname();
 
   useEffect(() => {
     if (typeof window === "undefined" || !("Notification" in window)) return;
-    if (Notification.permission === "default") {
-      const dismissed = localStorage.getItem("hatch_notify_dismiss");
-      if (!dismissed) setShow(true);
+    if (PUBLIC_PATHS.includes(path || "/")) {
+      setShow(false);
+      return;
     }
-  }, []);
+    (async () => {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) {
+        setShow(false);
+        return;
+      }
+      if (Notification.permission === "default") {
+        const dismissed = localStorage.getItem("hatch_notify_dismiss");
+        if (!dismissed) setShow(true);
+      }
+    })();
+  }, [path]);
 
   if (!show) return null;
 
@@ -35,7 +50,7 @@ export default function NotifyPrompt() {
     >
       <div style={{ fontWeight: 800, fontSize: 14, marginBottom: 4 }}>Turn on call & chat alerts</div>
       <p className="muted" style={{ fontSize: 12, marginBottom: 10 }}>
-        So you get a ring even when Hatch is closed. Install the app + Allow.
+        Install Hatch to Home Screen + Allow — so calls ring even when closed.
       </p>
       <div className="row" style={{ gap: 8 }}>
         <button

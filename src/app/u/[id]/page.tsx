@@ -78,6 +78,10 @@ export default function PublicProfilePage() {
     );
   }
 
+  const mode = (p.profile_mode || "both") as string;
+  const showSocial = mode === "social" || mode === "both" || me === id;
+  const showPro = mode === "professional" || mode === "both" || me === id;
+
   const online = isRecentlyOnline(p.last_seen);
   const skills = Array.isArray(p.skills) ? p.skills : [];
   const strength = Math.min(100, [
@@ -128,17 +132,20 @@ export default function PublicProfilePage() {
           <div className="row" style={{ justifyContent: "center", gap: 10, marginTop: 12, flexWrap: "wrap" }}>
             <span className="badge" style={{ background: "linear-gradient(135deg,#8b5cf6,#ec4899)", color: "#fff" }}>Rep {p.rep_score || 0}</span>
             <span className="badge">Profile {strength}%</span>
+            {mode !== "both" && me !== id && (
+              <span className="badge">{mode === "professional" ? "Career view" : "Social view"}</span>
+            )}
           </div>
         </div>
 
-        {p.bio && (
+        {showSocial && p.bio && (
           <div className="card" style={{ marginBottom: 12 }}>
             <div className="h2" style={{ fontSize: 14, marginBottom: 6 }}>About</div>
             <p style={{ fontSize: 14, lineHeight: 1.5 }}>{p.bio}</p>
           </div>
         )}
 
-        {(p.career_goal || p.intent || p.availability) && (
+        {showPro && (p.career_goal || p.intent || p.availability) && (
           <div className="card" style={{ marginBottom: 12 }}>
             <div className="h2" style={{ fontSize: 14, marginBottom: 8 }}>Focus</div>
             {p.career_goal && <p style={{ fontSize: 13, marginBottom: 4 }}><span className="muted">Goal · </span>{p.career_goal}</p>}
@@ -147,7 +154,7 @@ export default function PublicProfilePage() {
           </div>
         )}
 
-        {(skills.length > 0 || p.tech_stack) && (
+        {showPro && (skills.length > 0 || p.tech_stack) && (
           <div className="card" style={{ marginBottom: 12 }}>
             <div className="h2" style={{ fontSize: 14, marginBottom: 8 }}>Builder</div>
             <div className="row" style={{ gap: 6, flexWrap: "wrap", marginBottom: 8 }}>
@@ -157,7 +164,7 @@ export default function PublicProfilePage() {
           </div>
         )}
 
-        {certs.length > 0 && (
+        {showPro && certs.length > 0 && (
           <div className="card" style={{ marginBottom: 12 }}>
             <div className="h2" style={{ fontSize: 14, marginBottom: 8 }}>Certificates</div>
             {certs.map((c: any) => (
@@ -170,17 +177,23 @@ export default function PublicProfilePage() {
           </div>
         )}
 
-        <div className="row" style={{ gap: 8, marginBottom: 12, flexWrap: "wrap" }}>
-          {p.github_handle && (
-            <a className="btn-ghost btn-sm" href={`https://github.com/${p.github_handle}`} target="_blank" rel="noreferrer">GitHub</a>
-          )}
-          {p.leetcode_handle && (
-            <a className="btn-ghost btn-sm" href={`https://leetcode.com/${p.leetcode_handle}`} target="_blank" rel="noreferrer">LeetCode</a>
-          )}
-          {p.linkedin_url && (
-            <a className="btn-ghost btn-sm" href={p.linkedin_url} target="_blank" rel="noreferrer">LinkedIn</a>
-          )}
-        </div>
+        {showPro && (
+          <div className="row" style={{ gap: 8, marginBottom: 12, flexWrap: "wrap" }}>
+            {p.github_handle && (
+              <a className="btn-ghost btn-sm" href={`https://github.com/${p.github_handle}`} target="_blank" rel="noreferrer">GitHub</a>
+            )}
+            {p.leetcode_handle && (
+              <a className="btn-ghost btn-sm" href={`https://leetcode.com/${p.leetcode_handle}`} target="_blank" rel="noreferrer">LeetCode</a>
+            )}
+            {p.linkedin_url && (
+              <a className="btn-ghost btn-sm" href={p.linkedin_url} target="_blank" rel="noreferrer">LinkedIn</a>
+            )}
+          </div>
+        )}
+
+        {!showPro && !showSocial && (
+          <p className="muted" style={{ fontSize: 13, marginBottom: 12 }}>Limited profile view</p>
+        )}
 
         {me !== id && (
           <div className="row" style={{ gap: 10 }}>
