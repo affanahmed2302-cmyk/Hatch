@@ -6,6 +6,7 @@ import {
   isMidnightBlackout, blackoutCountdown, postMidnightDrop, fetchMidnightDrops,
   sendSecretConfession, myIncomingSecrets, myOutgoingSecrets,
   markSecretInterested, offerReveal, resolveConfessionPeer,
+  genderLabel, genderEmoji,
 } from "@/lib/legendary";
 
 export default function MidnightBlackout({ userId }: { userId: string | null }) {
@@ -51,9 +52,9 @@ export default function MidnightBlackout({ userId }: { userId: string | null }) 
     (async () => {
       const { data } = await supabase
         .from("profiles")
-        .select("id, full_name, username, department, year")
+        .select("id, full_name, username, department, year, avatar_url, gender")
         .neq("id", userId)
-        .limit(60);
+        .limit(80);
       setPeople(data || []);
     })();
   }, [userId]);
@@ -68,10 +69,10 @@ export default function MidnightBlackout({ userId }: { userId: string | null }) 
   async function sendSecret() {
     if (!userId || !targetId) return;
     const res = await sendSecretConfession(userId, targetId, secretText);
-    if (!res.ok) setErr(res.error || "Run hatch_confessions.sql");
+    if (!res.ok) setErr(res.error || "Run hatch_confessions.sql / hatch_dating_fields.sql");
     else {
       setSecretText("");
-      setMsg("Sent in secret — they won't see your name unless both reveal");
+      setMsg("Sent as a highlighted secret — they see gender cue, not your name");
       setErr("");
       await load();
     }
@@ -89,7 +90,7 @@ export default function MidnightBlackout({ userId }: { userId: string | null }) 
     const res = await offerReveal(id, userId);
     if (!res.ok) setErr(res.error || "Failed");
     else if (res.mutual) {
-      setMsg("Mutual reveal! Names unlocked");
+      setMsg("Mutual reveal! Photo & name unlocked");
       const row = [...incoming, ...outgoing].find((x) => x.id === id);
       if (row) {
         const peer = await resolveConfessionPeer(row, userId);
@@ -143,7 +144,7 @@ export default function MidnightBlackout({ userId }: { userId: string | null }) 
       {mode === "wall" && (
         <>
           <p className="muted" style={{ fontSize: 11, marginBottom: 8 }}>
-            Public board · <strong>no names ever</strong> · just the text
+            Public board · <strong>no names ever</strong>
           </p>
           <div className="row" style={{ gap: 6, marginBottom: 8, flexWrap: "wrap" }}>
             {(["confession", "project", "pulse"] as const).map((k) => (
@@ -151,21 +152,14 @@ export default function MidnightBlackout({ userId }: { userId: string | null }) 
             ))}
           </div>
           <div className="row" style={{ gap: 8, marginBottom: 10 }}>
-            <input
-              value={text}
-              onChange={(e) => setText(e.target.value)}
-              placeholder="Anonymous drop…"
-              maxLength={280}
-              style={{ flex: 1, background: "rgba(0,0,0,0.35)" }}
-            />
+            <input value={text} onChange={(e) => setText(e.target.value)} placeholder="Anonymous drop…" maxLength={280} style={{ flex: 1, background: "rgba(0,0,0,0.35)" }} />
             <button className="btn btn-sm" onClick={post}>Drop</button>
           </div>
           <div style={{ maxHeight: 200, overflowY: "auto" }}>
             {drops.map((d) => (
-              <div key={d.id} style={{ padding: "8px 0", borderTop: "1px solid rgba(167,139,250,0.2)" }}>
+              <div key={d.id} style={{ padding: "10px 0", borderTop: "1px solid rgba(167,139,250,0.2)" }}>
                 <span className="badge" style={{ fontSize: 10 }}>{d.kind}</span>
                 <p style={{ fontSize: 14, marginTop: 4, color: "#f3e8ff" }}>{d.body}</p>
-                <p className="muted" style={{ fontSize: 10 }}>Anonymous</p>
               </div>
             ))}
             {!drops.length && <p className="muted" style={{ fontSize: 12 }}>First drop owns the night…</p>}
@@ -176,64 +170,80 @@ export default function MidnightBlackout({ userId }: { userId: string | null }) 
       {mode === "secret" && (
         <>
           <p className="muted" style={{ fontSize: 11, marginBottom: 8, lineHeight: 1.45 }}>
-            Pick someone. They only see: <em>“Someone confessed”</em> + your words.
-            Names unlock only if <strong>both</strong> tap Reveal.
+            They see a <strong>highlighted card</strong>: gender cue + your words — <strong>not</strong> your name/photo until mutual reveal.
           </p>
-          <select
-            value={targetId}
-            onChange={(e) => setTargetId(e.target.value)}
-            style={{ width: "100%", marginBottom: 8, background: "rgba(0,0,0,0.35)", color: "#fff", padding: 10, borderRadius: 10 }}
-          >
+          <select value={targetId} onChange={(e) => setTargetId(e.target.value)} style={{ width: "100%", marginBottom: 8, background: "rgba(0,0,0,0.35)", color: "#fff", padding: 10, borderRadius: 10 }}>
             <option value="">Select person…</option>
             {people.map((p) => (
               <option key={p.id} value={p.id}>
-                {displayName(p)}{p.department ? ` · ${p.department}` : ""}
+                {displayName(p)}{p.department ? ` · ${p.department}` : ""}{p.gender ? ` · ${p.gender}` : ""}
               </option>
             ))}
           </select>
-          <textarea
-            value={secretText}
-            onChange={(e) => setSecretText(e.target.value)}
-            placeholder="What would you say if they never knew it was you…"
-            maxLength={400}
-            rows={3}
-            style={{ width: "100%", marginBottom: 8, background: "rgba(0,0,0,0.35)", color: "#fff", padding: 10, borderRadius: 10, border: "1px solid var(--border)" }}
-          />
-          <button className="btn" onClick={sendSecret} disabled={!targetId || secretText.length < 5}>
-            Send in secret
-          </button>
+          <textarea value={secretText} onChange={(e) => setSecretText(e.target.value)} placeholder="What would you say if they never knew it was you…" maxLength={400} rows={3} style={{ width: "100%", marginBottom: 8, background: "rgba(0,0,0,0.35)", color: "#fff", padding: 10, borderRadius: 10, border: "1px solid var(--border)" }} />
+          <button className="btn" onClick={sendSecret} disabled={!targetId || secretText.length < 5}>Send secret confession</button>
         </>
       )}
 
       {mode === "inbox" && (
-        <div style={{ maxHeight: 280, overflowY: "auto" }}>
-          <p style={{ fontWeight: 700, fontSize: 12, marginBottom: 8, color: "#e9d5ff" }}>Received (anonymous)</p>
-          {incoming.map((c) => (
-            <div key={c.id} style={{ marginBottom: 12, padding: 10, borderRadius: 12, background: "rgba(0,0,0,0.3)", border: "1px solid rgba(167,139,250,0.25)" }}>
-              <p style={{ fontSize: 13, color: "#f3e8ff" }}>{c.body}</p>
-              <p className="muted" style={{ fontSize: 10, marginTop: 4 }}>
-                From: {c.from_revealed && c.to_revealed && revealed[c.id]
-                  ? displayName(revealed[c.id])
-                  : "Hidden until mutual reveal"}
-              </p>
-              <div className="row" style={{ gap: 6, marginTop: 8, flexWrap: "wrap" }}>
-                {!c.to_interested && (
-                  <button className="btn-ghost btn-sm" onClick={() => interested(c.id)}>I'm curious</button>
-                )}
-                <button className="btn btn-sm" onClick={() => reveal(c.id)}>Reveal my side</button>
-                {c.from_revealed && c.to_revealed && revealed[c.id] && (
-                  <Link href={"/chat/" + revealed[c.id].id} className="btn-ghost btn-sm">Chat</Link>
-                )}
+        <div style={{ maxHeight: 320, overflowY: "auto" }}>
+          <p style={{ fontWeight: 700, fontSize: 12, marginBottom: 10, color: "#e9d5ff" }}>Secret confessions</p>
+          {incoming.map((c) => {
+            const mutual = c.from_revealed && c.to_revealed && revealed[c.id];
+            return (
+              <div key={c.id} style={{
+                marginBottom: 14, padding: 14, borderRadius: 16,
+                background: "linear-gradient(135deg,rgba(236,72,153,0.2),rgba(88,28,135,0.35))",
+                border: "1px solid rgba(244,114,182,0.45)",
+                boxShadow: "0 8px 24px rgba(0,0,0,0.25)",
+              }}>
+                <div className="row" style={{ gap: 12, alignItems: "center", marginBottom: 10 }}>
+                  {mutual ? (
+                    <div style={{
+                      width: 48, height: 48, borderRadius: "50%",
+                      background: revealed[c.id]?.avatar_url
+                        ? `url(${revealed[c.id].avatar_url}) center/cover`
+                        : "var(--grad-cool)",
+                    }} />
+                  ) : (
+                    <div style={{
+                      width: 48, height: 48, borderRadius: "50%",
+                      background: "linear-gradient(135deg,#4c1d95,#9d174d)",
+                      display: "flex", alignItems: "center", justifyContent: "center", fontSize: 22,
+                    }}>
+                      {genderEmoji(c.from_gender)}
+                    </div>
+                  )}
+                  <div style={{ flex: 1 }}>
+                    <div style={{ fontWeight: 800, fontSize: 14, color: "#fce7f3" }}>
+                      {mutual ? displayName(revealed[c.id]) : `${genderLabel(c.from_gender)} confessed`}
+                    </div>
+                    <p className="muted" style={{ fontSize: 11 }}>
+                      {mutual ? "Identity unlocked" : "Name hidden until you both reveal"}
+                    </p>
+                  </div>
+                  <span className="badge" style={{ background: "#ec4899", color: "#fff" }}>SECRET</span>
+                </div>
+                <p style={{ fontSize: 15, color: "#fdf4ff", lineHeight: 1.45, fontWeight: 500 }}>{c.body}</p>
+                <div className="row" style={{ gap: 6, marginTop: 12, flexWrap: "wrap" }}>
+                  {!c.to_interested && !mutual && (
+                    <button className="btn-ghost btn-sm" onClick={() => interested(c.id)}>I'm curious</button>
+                  )}
+                  {!mutual && <button className="btn btn-sm" onClick={() => reveal(c.id)}>Reveal my side</button>}
+                  {mutual && (
+                    <Link href={"/chat/" + revealed[c.id].id} className="btn btn-sm">Open chat</Link>
+                  )}
+                </div>
               </div>
-            </div>
-          ))}
-          {!incoming.length && <p className="muted" style={{ fontSize: 12 }}>No secret confessions yet</p>}
+            );
+          })}
+          {!incoming.length && <p className="muted" style={{ fontSize: 12 }}>No secret confessions yet tonight</p>}
 
-          <p style={{ fontWeight: 700, fontSize: 12, margin: "14px 0 8px", color: "#e9d5ff" }}>You sent</p>
+          <p style={{ fontWeight: 700, fontSize: 12, margin: "16px 0 8px", color: "#e9d5ff" }}>You sent</p>
           {outgoing.map((c) => (
-            <div key={c.id} style={{ marginBottom: 8, fontSize: 12 }}>
-              <p className="muted">Status: {c.status} · interested: {c.to_interested ? "yes" : "no"}</p>
-              <p style={{ color: "#ddd" }}>{c.body.slice(0, 80)}…</p>
+            <div key={c.id} style={{ marginBottom: 8, fontSize: 12, opacity: 0.9 }}>
+              <p className="muted">Status: {c.status} · interested: {c.to_interested ? "yes" : "waiting"}</p>
+              <p style={{ color: "#ddd" }}>{c.body.slice(0, 100)}</p>
               <button className="btn-ghost btn-sm" onClick={() => reveal(c.id)}>Offer reveal</button>
             </div>
           ))}
