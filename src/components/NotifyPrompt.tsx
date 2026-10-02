@@ -1,6 +1,8 @@
 "use client";
 import { useEffect, useState } from "react";
 import { ensureNotifyPermission } from "@/lib/notify";
+import { registerPushSubscription } from "@/lib/pushClient";
+import { supabase } from "@/lib/supabase";
 
 export default function NotifyPrompt() {
   const [show, setShow] = useState(false);
@@ -31,15 +33,17 @@ export default function NotifyPrompt() {
         boxShadow: "0 12px 40px rgba(0,0,0,0.45)",
       }}
     >
-      <div style={{ fontWeight: 800, fontSize: 14, marginBottom: 4 }}>Turn on notifications</div>
+      <div style={{ fontWeight: 800, fontSize: 14, marginBottom: 4 }}>Turn on call & chat alerts</div>
       <p className="muted" style={{ fontSize: 12, marginBottom: 10 }}>
-        Get alerts for messages, calls, and when friends are free on campus.
+        So you get a ring even when Hatch is closed. Install the app + Allow.
       </p>
       <div className="row" style={{ gap: 8 }}>
         <button
           className="btn btn-sm"
           onClick={async () => {
             await ensureNotifyPermission();
+            const { data: { user } } = await supabase.auth.getUser();
+            if (user) await registerPushSubscription(user.id);
             setShow(false);
           }}
         >
