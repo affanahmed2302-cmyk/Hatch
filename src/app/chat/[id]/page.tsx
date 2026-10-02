@@ -7,6 +7,7 @@ import { hasChatLock, isChatUnlocked, unlockChat, isChatLocked } from "@/lib/cha
 import { startCall, endCall, respondCall, callEmbedUrl, type CallRow } from "@/lib/calls";
 import { haptic, playPing, bumpChatStreak, getChatStreak, markMessagesRead, bumpDaily } from "@/lib/obsession";
 import { blockUser, reportUser } from "@/lib/safety";
+import { campusIcebreakers, ensureNotifyPermission, notifyUser } from "@/lib/notify";
 
 export default function ChatPage() {
   const { id: peerId } = useParams<{ id: string }>();
@@ -27,6 +28,7 @@ export default function ChatPage() {
   const [peerTyping, setPeerTyping] = useState(false);
   const [recording, setRecording] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
+  const [freePlace, setFreePlace] = useState<string | null>(null);
   const mediaRec = useRef<MediaRecorder | null>(null);
   const chunks = useRef<Blob[]>([]);
   const bottom = useRef<HTMLDivElement>(null);
@@ -38,13 +40,36 @@ export default function ChatPage() {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) { router.push("/login"); return; }
       setMyId(user.id);
+      ensureNotifyPermission();
       const { data: me } = await supabase.from("profiles").select("full_name, username").eq("id", user.id).maybeSingle();
       setMyName(displayName(me || {}) || "Hatch");
+
+      // Resume call accepted from global overlay
+      const savedUrl = sessionStorage.getItem("hatch_active_call_url");
+      const savedId = sessionStorage.getItem("hatch_active_call_id");
+      if (savedUrl && savedId) {
+        sessionStorage.removeItem("hatch_active_call_url");
+        sessionStorage.removeItem("hatch_active_call_id");
+        setCallUrl(savedUrl);
+        setCallId(savedId);
+      }
+
       if (hasChatLock() && isChatLocked(peerId) && !isChatUnlocked()) {
         setNeedPin(true); setLoading(false); return;
       }
-      const { data: p } = await supabase.from("profiles").select("id, full_name, username, avatar_url, department, intent, career_goal").eq("id", peerId).maybeSingle();
+      const { data: p } = await supabase.from("profiles").select("id, full_name, username, avatar_url, department, intent, career_goal, year").eq("id", peerId).maybeSingle();
       setPeer(p);
+
+      try {
+        const { data: fn } = await supabase
+          .from("free_now")
+          .select("place, expires_at")
+          .eq("user_id", peerId)
+          .gt("expires_at", new Date().toISOString())
+          .maybeSingle();
+        if (fn?.place) setFreePlace(fn.place);
+      } catch { /* table optional */ }
+
       await loadMsgs(user.id);
       await markMessagesRead(user.id, peerId);
       setStreak(await getChatStreak(user.id, peerId));
@@ -64,8 +89,15 @@ export default function ChatPage() {
     if (!myId || !peerId) return;
     const room = `dm-${[myId, peerId].sort().join("-")}`;
     const ch = supabase.channel(room)
-      .on("postgres_changes", { event: "INSERT", schema: "public", table: "messages" }, async () => {
+      .on("postgres_changes", { event: "INSERT", schema: "public", table: "messages" }, async (payload) => {
         await loadMsgs(myId); await markMessagesRead(myId, peerId); haptic(8); playPing();
+        const row = payload.new as any;
+        if (row?.sender_id === peerId) {
+          notifyUser(displayName(peer || {}) || "New message", row.media_url ? "Voice note" : String(row.content || "").slice(0, 60), {
+            url: `/chat/${peerId}`,
+            tag: "chat-" + peerId,
+          });
+        }
       })
       .on("postgres_changes", { event: "UPDATE", schema: "public", table: "messages" }, () => loadMsgs(myId))
       .on("broadcast", { event: "typing" }, (payload) => {
@@ -77,7 +109,7 @@ export default function ChatPage() {
       })
       .subscribe();
     return () => { supabase.removeChannel(ch); };
-  }, [myId, peerId]);
+  }, [myId, peerId, peer]);
 
   useEffect(() => {
     if (!myId) return;
@@ -86,7 +118,8 @@ export default function ChatPage() {
         const row = (payload.new || payload.old) as CallRow;
         if (!row) return;
         if (row.callee_id === myId && row.status === "ringing" && row.caller_id === peerId) {
-          setIncoming(row); haptic([30, 50, 30]); playPing();
+          setIncoming(row); haptic([30, 50, 30, 50, 30]); playPing();
+          notifyUser("Incoming call", `${displayName(peer || {})} is calling`, { url: `/chat/${peerId}`, tag: "call" });
         }
         if (row.callee_id === myId && (row.status === "ended" || row.status === "rejected")) setIncoming(null);
         if (row.caller_id === myId && row.id === callId) {
@@ -101,7 +134,7 @@ export default function ChatPage() {
         }
       }).subscribe();
     return () => { supabase.removeChannel(ch); };
-  }, [myId, peerId, callId, myName]);
+  }, [myId, peerId, callId, myName, peer]);
 
   function broadcastTyping() {
     if (!myId || !peerId) return;
@@ -134,16 +167,26 @@ export default function ChatPage() {
       rec.onstop = async () => {
         stream.getTracks().forEach(t => t.stop());
         const blob = new Blob(chunks.current, { type: "audio/webm" });
+        if (blob.size < 500) { setRecording(false); setCallErr("Hold mic a bit longer"); return; }
         const file = new File([blob], "voice.webm", { type: "audio/webm" });
         const path = myId + "/voice-" + Date.now() + ".webm";
         const { error } = await supabase.storage.from("chat-media").upload(path, file, { contentType: "audio/webm" });
         if (error) {
-          setCallErr(error.message.includes("Bucket") || error.message.includes("not found") ? "Storage bucket chat-media missing" : error.message);
+          setCallErr(
+            error.message.includes("Bucket") || error.message.includes("not found")
+              ? "Create storage bucket chat-media (public) in Supabase"
+              : error.message
+          );
           setRecording(false);
           return;
         }
         const { data: pub } = supabase.storage.from("chat-media").getPublicUrl(path);
-        await supabase.from("messages").insert({ sender_id: myId, receiver_id: peerId, content: "Voice note", media_url: pub.publicUrl });
+        await supabase.from("messages").insert({
+          sender_id: myId,
+          receiver_id: peerId,
+          content: "🎤 Voice note",
+          media_url: pub.publicUrl,
+        });
         setStreak(await bumpChatStreak(myId, peerId));
         haptic(12);
         await loadMsgs(myId);
@@ -152,7 +195,8 @@ export default function ChatPage() {
       mediaRec.current = rec;
       rec.start();
       setRecording(true);
-    } catch { setCallErr("Microphone permission needed"); }
+      setCallErr("");
+    } catch { setCallErr("Allow microphone for voice notes"); }
   }
 
   function stopVoice() { if (mediaRec.current && recording) mediaRec.current.stop(); }
@@ -164,6 +208,7 @@ export default function ChatPage() {
     if (!res.ok || !res.call) { setCallErr(res.error || "Could not start call"); return; }
     setCallId(res.call.id);
     setRingingOut(true);
+    await loadMsgs(myId);
   }
 
   async function cancelRing() { if (callId) await endCall(callId); setRingingOut(false); setCallId(null); }
@@ -181,13 +226,9 @@ export default function ChatPage() {
   if (needPin) return (<div className="shell" style={{ padding: 24 }}><h1 className="h1">Locked chat</h1><input type="password" inputMode="numeric" placeholder="PIN" value={pin} onChange={e => setPin(e.target.value)} style={{ margin: "12px 0" }} /><button className="btn" onClick={() => { if (unlockChat(pin)) window.location.reload(); else setCallErr("Wrong PIN"); }}>Unlock</button></div>);
   if (loading) return <div className="shell" style={{ display: "flex", alignItems: "center", justifyContent: "center" }}><span className="muted">Loading...</span></div>;
   if (callUrl) return (<div className="shell" style={{ padding: 0 }}><div className="topbar"><span style={{ flex: 1 }}>In call</span><button className="btn btn-sm" style={{ background: "#f43f5e" }} onClick={hangup}>End</button></div><iframe src={callUrl} style={{ width: "100%", height: "calc(100dvh - 56px)", border: 0 }} allow="camera; microphone; fullscreen; autoplay" /></div>);
-  if (ringingOut) return (<div className="shell" style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: 24 }}><p className="h2">{displayName(peer || {})}</p><p className="muted">Ringing…</p><button className="btn" style={{ background: "#f43f5e" }} onClick={cancelRing}>Cancel</button></div>);
+  if (ringingOut) return (<div className="shell" style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: 24 }}><p className="h2">{displayName(peer || {})}</p><p className="muted">Ringing… keep app open</p><button className="btn" style={{ background: "#f43f5e" }} onClick={cancelRing}>Cancel</button></div>);
 
-  const ices = [
-    `Hey — free for a quick ${peer?.intent || peer?.career_goal || "collab"} chat?`,
-    `Hi! Anyone from ${peer?.department || "BMS"} free for a study sync this week?`,
-    "What skill are you leveling hardest this semester?",
-  ];
+  const ices = campusIcebreakers(peer || {}, freePlace);
 
   return (
     <div className="shell" style={{ display: "flex", flexDirection: "column", paddingBottom: 0 }}>
@@ -198,7 +239,9 @@ export default function ChatPage() {
           <div style={{ width: 36, height: 36, borderRadius: "50%", background: peer?.avatar_url ? `url(${peer.avatar_url}) center/cover` : "var(--grad-cool)" }} />
           <div style={{ minWidth: 0 }}>
             <div className="h2" style={{ fontSize: 15 }}>{displayName(peer || {})}</div>
-            <span className="muted" style={{ fontSize: 11 }}>{peerTyping ? "typing…" : streak > 0 ? `🔥 ${streak} day` : "View profile"}</span>
+            <span className="muted" style={{ fontSize: 11 }}>
+              {peerTyping ? "typing…" : freePlace ? `🟢 at ${freePlace}` : streak > 0 ? `🔥 ${streak} day` : "View profile"}
+            </span>
           </div>
         </Link>
         <button className="btn-ghost btn-sm" onClick={() => ring(true)}>Audio</button>
@@ -212,8 +255,10 @@ export default function ChatPage() {
       <div style={{ flex: 1, overflowY: "auto", padding: 16 }}>
         {msgs.length === 0 && (
           <div className="card" style={{ marginBottom: 12, background: "rgba(139,92,246,0.12)" }}>
-            <p style={{ fontSize: 13, fontWeight: 700, marginBottom: 6 }}>Icebreakers</p>
-            <p className="muted" style={{ fontSize: 12, marginBottom: 8 }}>Tap to send — no dead chats</p>
+            <p style={{ fontSize: 13, fontWeight: 700, marginBottom: 6 }}>Quick openers</p>
+            <p className="muted" style={{ fontSize: 12, marginBottom: 8 }}>
+              {freePlace ? `They're free at ${freePlace} — say hi` : "Tap one to send"}
+            </p>
             {ices.map((line, i) => (
               <button key={i} className="btn-ghost btn-sm" style={{ display: "block", width: "100%", textAlign: "left", marginBottom: 6, whiteSpace: "normal", height: "auto", padding: "10px 12px" }} onClick={() => send(line)}>{line}</button>
             ))}
@@ -221,17 +266,31 @@ export default function ChatPage() {
         )}
         {msgs.map(m => (
           <div key={m.id} className={m.sender_id === myId ? "bubble-me" : "bubble-them"} style={{ marginBottom: 8 }}>
-            {m.media_url ? <audio controls src={m.media_url} style={{ maxWidth: "100%", height: 36 }} /> : m.content}
+            {m.media_url ? (
+              <div>
+                <p style={{ fontSize: 12, marginBottom: 4, opacity: 0.85 }}>🎤 Voice note</p>
+                <audio controls src={m.media_url} style={{ maxWidth: "100%", height: 36 }} />
+              </div>
+            ) : m.content}
             {m.sender_id === myId && m.read_at && <span style={{ display: "block", fontSize: 10, opacity: 0.7 }}>Seen</span>}
           </div>
         ))}
         <div ref={bottom} />
       </div>
       <div className="row" style={{ padding: 12, borderTop: "1px solid var(--border)", gap: 8 }}>
-        <button type="button" className="btn-ghost btn-sm" style={{ minWidth: 44, height: 44, borderRadius: 22, background: recording ? "#f43f5e" : "rgba(139,92,246,0.2)" }} onClick={recording ? stopVoice : startVoice}>{recording ? "■" : "🎤"}</button>
+        <button
+          type="button"
+          className="btn-ghost btn-sm"
+          style={{ minWidth: 48, height: 44, borderRadius: 22, background: recording ? "#f43f5e" : "rgba(139,92,246,0.2)", fontWeight: 700 }}
+          onClick={recording ? stopVoice : startVoice}
+          title={recording ? "Stop & send" : "Record voice"}
+        >
+          {recording ? "STOP" : "🎤"}
+        </button>
         <input value={text} onChange={e => { setText(e.target.value); broadcastTyping(); }} onKeyDown={e => e.key === "Enter" && send()} placeholder="Message..." style={{ flex: 1 }} />
         <button className="btn btn-sm" onClick={() => send()} disabled={!text.trim()}>Send</button>
       </div>
+      {recording && <p className="muted" style={{ textAlign: "center", fontSize: 12, paddingBottom: 8 }}>Recording… tap STOP to send</p>}
     </div>
   );
 }
