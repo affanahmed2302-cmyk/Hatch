@@ -1,7 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import "./globals.css";
 import Providers from "@/components/Providers";
-import PilotButton from "@/components/PilotButton";
 
 export const metadata: Metadata = {
   title: {
@@ -47,10 +46,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
       </head>
       <body>
-        <Providers>
-          {children}
-          <PilotButton />
-        </Providers>
+        <Providers>{children}</Providers>
       </body>
     </html>
   );
