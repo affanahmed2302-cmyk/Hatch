@@ -1,6 +1,9 @@
 "use client";
 import { useEffect } from "react";
 import InstallBanner from "./InstallBanner";
+import LiveAlerts from "./LiveAlerts";
+import NotifyPrompt from "./NotifyPrompt";
+import PilotButton from "./PilotButton";
 
 export default function Providers({ children }: { children: React.ReactNode }) {
   useEffect(() => {
@@ -11,7 +14,10 @@ export default function Providers({ children }: { children: React.ReactNode }) {
   return (
     <>
       {children}
+      <LiveAlerts />
+      <NotifyPrompt />
       <InstallBanner />
+      <PilotButton />
     </>
   );
 }
