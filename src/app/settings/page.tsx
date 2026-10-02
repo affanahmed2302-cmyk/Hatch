@@ -7,7 +7,6 @@ import {
   hasChatLock, setChatLockPin, clearChatLock, verifyPin,
 } from "@/lib/chatLock";
 import { ensureInviteCode, trackEvent } from "@/lib/safety";
-import { isFeatureOn } from "@/lib/features";
 import Nav from "@/components/Nav";
 
 export default function SettingsPage() {
@@ -21,7 +20,7 @@ export default function SettingsPage() {
   const [err, setErr] = useState("");
   const [userId, setUserId] = useState<string | null>(null);
   const [email, setEmail] = useState("");
-  const [sparksOn, setSparksOn] = useState(false);
+  const [profileMode, setProfileMode] = useState<"professional" | "social" | "both">("both");
   const router = useRouter();
 
   useEffect(() => {
@@ -32,10 +31,30 @@ export default function SettingsPage() {
       setEmail(user.email || "");
       setLockOn(hasChatLock());
       setInvite(await ensureInviteCode(user.id));
-      setSparksOn(await isFeatureOn("feature_sparks"));
+      const { data } = await supabase.from("profiles").select("profile_mode").eq("id", user.id).maybeSingle();
+      if (data?.profile_mode === "professional" || data?.profile_mode === "social" || data?.profile_mode === "both") {
+        setProfileMode(data.profile_mode);
+      }
       trackEvent(user.id, "settings_open");
     })();
   }, [router]);
+
+  async function saveMode(mode: "professional" | "social" | "both") {
+    if (!userId) return;
+    setProfileMode(mode);
+    const { error } = await supabase.from("profiles").update({
+      profile_mode: mode,
+      updated_at: new Date().toISOString(),
+    }).eq("id", userId);
+    if (error) setErr(error.message + " — run hatch_profile_mode.sql");
+    else setMsg(
+      mode === "professional"
+        ? "Others see career side (skills, GitHub, goals)"
+        : mode === "social"
+          ? "Others see social side (bio, vibe, year)"
+          : "Others see full balanced profile"
+    );
+  }
 
   function enableLock() {
     if (newPin.length < 4) { setErr("PIN min 4 digits"); return; }
@@ -86,29 +105,42 @@ export default function SettingsPage() {
           </Link>
         )}
 
+        <div className="card stack">
+          <div className="h2">How others see you</div>
+          <p className="muted" style={{ fontSize: 12 }}>
+            Professional = skills & career · Social = vibe & bio · Both = balanced
+          </p>
+          <div className="row" style={{ gap: 6, flexWrap: "wrap" }}>
+            {(["professional", "social", "both"] as const).map((m) => (
+              <button
+                key={m}
+                className={profileMode === m ? "btn btn-sm" : "btn-ghost btn-sm"}
+                onClick={() => saveMode(m)}
+              >
+                {m === "both" ? "Both" : m[0].toUpperCase() + m.slice(1)}
+              </button>
+            ))}
+          </div>
+        </div>
+
         <Link href="/profile" className="card" style={{ textDecoration: "none", color: "inherit" }}>
           <div style={{ fontWeight: 700 }}>Edit profile</div>
           <p className="muted" style={{ fontSize: 12 }}>Photo, skills, GitHub, bio</p>
         </Link>
 
-        <Link href="/premium" className="card" style={{
-          textDecoration: "none", color: "inherit",
-          border: "1px solid rgba(251,191,36,0.35)",
-        }}>
-          <div style={{ fontWeight: 700 }}>Premium · ₹120</div>
-          <p className="muted" style={{ fontSize: 12 }}>Private Circle</p>
+        <Link href="/explore" className="card" style={{ textDecoration: "none", color: "inherit" }}>
+          <div style={{ fontWeight: 700 }}>Explore</div>
+          <p className="muted" style={{ fontSize: 12 }}>Teams, clubs, midnight, tools</p>
         </Link>
 
-        {(sparksOn || isSuperAdmin(email)) && (
-          <Link href="/sparks" className="card" style={{ textDecoration: "none", color: "inherit" }}>
-            <div style={{ fontWeight: 700 }}>Campus Sparks</div>
-            <p className="muted" style={{ fontSize: 12 }}>Dating mini-app</p>
-          </Link>
-        )}
+        <Link href="/sparks" className="card" style={{ textDecoration: "none", color: "inherit" }}>
+          <div style={{ fontWeight: 700 }}>Campus Sparks</div>
+          <p className="muted" style={{ fontSize: 12 }}>Dating · secondary · free at launch</p>
+        </Link>
 
-        <Link href="/explore" className="card" style={{ textDecoration: "none", color: "inherit" }}>
-          <div style={{ fontWeight: 700 }}>Explore tools</div>
-          <p className="muted" style={{ fontSize: 12 }}>Radar, Ghost, Clubs, Teams</p>
+        <Link href="/clubs" className="card" style={{ textDecoration: "none", color: "inherit" }}>
+          <div style={{ fontWeight: 700 }}>Clubs</div>
+          <p className="muted" style={{ fontSize: 12 }}>Club cores & events · growth focus</p>
         </Link>
 
         <div className="card stack">
