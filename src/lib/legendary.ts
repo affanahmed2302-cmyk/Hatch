@@ -25,12 +25,25 @@ export function blackoutCountdown(now = new Date()): string {
 }
 
 export function tonightKey(now = new Date()): string {
-  // Night of calendar date when window started (after midnight still same "night")
   const d = new Date(now)
-  if (d.getHours() < 3) {
-    // still previous calendar night's session started at midnight
-  }
   return d.toLocaleDateString('en-CA')
+}
+
+export function genderLabel(g?: string | null) {
+  if (!g) return 'Someone'
+  const s = g.toLowerCase()
+  if (s.includes('woman') || s === 'f' || s === 'female') return 'A woman'
+  if (s.includes('man') && !s.includes('woman')) return 'A man'
+  if (s.includes('non')) return 'Someone'
+  return 'Someone'
+}
+
+export function genderEmoji(g?: string | null) {
+  if (!g) return '💜'
+  const s = g.toLowerCase()
+  if (s.includes('woman') || s === 'f' || s === 'female') return '👩'
+  if (s.includes('man') && !s.includes('woman')) return '👨'
+  return '💜'
 }
 
 export async function postMidnightDrop(
@@ -80,12 +93,21 @@ export async function sendSecretConfession(fromId: string, toId: string, body: s
   const t = body.trim().slice(0, 400)
   if (t.length < 5) return { ok: false as const, error: 'Write a bit more' }
   try {
+    let fromGender: string | null = null
+    const { data: sp } = await supabase.from('sparks_profiles').select('gender').eq('user_id', fromId).maybeSingle()
+    if (sp?.gender) fromGender = sp.gender
+    else {
+      const { data: pr } = await supabase.from('profiles').select('gender').eq('id', fromId).maybeSingle()
+      fromGender = pr?.gender || null
+    }
+
     const { error } = await supabase.from('secret_confessions').insert({
       from_id: fromId,
       to_id: toId,
       body: t,
       night_key: tonightKey(),
       status: 'pending',
+      from_gender: fromGender,
     })
     if (error) return { ok: false as const, error: error.message }
     return { ok: true as const, error: null }
@@ -98,7 +120,7 @@ export async function myIncomingSecrets(userId: string) {
   try {
     const { data } = await supabase
       .from('secret_confessions')
-      .select('id, body, status, from_revealed, to_interested, to_revealed, created_at, from_id')
+      .select('id, body, status, from_revealed, to_interested, to_revealed, created_at, from_id, from_gender')
       .eq('to_id', userId)
       .order('created_at', { ascending: false })
       .limit(30)
@@ -112,7 +134,7 @@ export async function myOutgoingSecrets(userId: string) {
   try {
     const { data } = await supabase
       .from('secret_confessions')
-      .select('id, body, status, from_revealed, to_interested, to_revealed, created_at, to_id')
+      .select('id, body, status, from_revealed, to_interested, to_revealed, created_at, to_id, from_gender')
       .eq('from_id', userId)
       .order('created_at', { ascending: false })
       .limit(20)
@@ -122,7 +144,6 @@ export async function myOutgoingSecrets(userId: string) {
   }
 }
 
-/** Target: "I'm curious" — still no names */
 export async function markSecretInterested(confessionId: string, userId: string) {
   const { error } = await supabase
     .from('secret_confessions')
@@ -133,7 +154,6 @@ export async function markSecretInterested(confessionId: string, userId: string)
   return { ok: true as const, error: null }
 }
 
-/** Either side can offer reveal; names only show when BOTH revealed */
 export async function offerReveal(confessionId: string, userId: string) {
   const { data: row } = await supabase
     .from('secret_confessions')
@@ -161,7 +181,7 @@ export async function resolveConfessionPeer(confession: any, myId: string) {
   const peerId = confession.from_id === myId ? confession.to_id : confession.from_id
   const { data } = await supabase
     .from('profiles')
-    .select('id, full_name, username, avatar_url, department')
+    .select('id, full_name, username, avatar_url, department, gender')
     .eq('id', peerId)
     .maybeSingle()
   return data
