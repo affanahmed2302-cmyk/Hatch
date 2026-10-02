@@ -1,26 +1,43 @@
 "use client";
 import { useEffect, useState } from "react";
+import Link from "next/link";
 
 const KEY = "hatch_install_dismissed";
+
+function isIosDevice() {
+  if (typeof window === "undefined") return false;
+  const ua = navigator.userAgent || "";
+  return /iPad|iPhone|iPod/.test(ua) || (navigator.platform === "MacIntel" && (navigator as any).maxTouchPoints > 1);
+}
+
+function isStandalone() {
+  if (typeof window === "undefined") return true;
+  return (
+    window.matchMedia("(display-mode: standalone)").matches ||
+    (window.navigator as any).standalone === true
+  );
+}
+
+function isInAppBrowser() {
+  const ua = navigator.userAgent || "";
+  return /FBAN|FBAV|Instagram|Line\/|Twitter|WhatsApp|MicroMessenger|Snapchat/i.test(ua);
+}
 
 export default function InstallBanner() {
   const [show, setShow] = useState(false);
   const [deferred, setDeferred] = useState<any>(null);
   const [ios, setIos] = useState(false);
-  const [standalone, setStandalone] = useState(true);
+  const [inApp, setInApp] = useState(false);
+  const [expand, setExpand] = useState(false);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
-    const isStandalone =
-      window.matchMedia("(display-mode: standalone)").matches ||
-      (window.navigator as any).standalone === true;
-    setStandalone(isStandalone);
-    if (isStandalone) return;
+    if (isStandalone()) return;
     if (localStorage.getItem(KEY) === "1") return;
 
-    const ua = navigator.userAgent || "";
-    const isIOS = /iPad|iPhone|iPod/.test(ua) || (navigator.platform === "MacIntel" && (navigator as any).maxTouchPoints > 1);
-    setIos(isIOS);
+    const iosDev = isIosDevice();
+    setIos(iosDev);
+    setInApp(isInAppBrowser());
 
     const onBip = (e: Event) => {
       e.preventDefault();
@@ -29,27 +46,17 @@ export default function InstallBanner() {
     };
     window.addEventListener("beforeinstallprompt", onBip);
 
-    // iOS never fires beforeinstallprompt — show manual tip after short delay
-    if (isIOS) {
-      const t = setTimeout(() => setShow(true), 1800);
-      return () => {
-        clearTimeout(t);
-        window.removeEventListener("beforeinstallprompt", onBip);
-      };
-    }
-
-    // Android / desktop Chromium: also show a soft tip if prompt never fires
-    const t2 = setTimeout(() => {
-      if (!isStandalone) setShow(true);
-    }, 4000);
+    // iOS / in-app: show install tip quickly
+    const delay = iosDev || isInAppBrowser() ? 1200 : 3500;
+    const t = setTimeout(() => setShow(true), delay);
 
     return () => {
       window.removeEventListener("beforeinstallprompt", onBip);
-      clearTimeout(t2);
+      clearTimeout(t);
     };
   }, []);
 
-  if (standalone || !show) return null;
+  if (!show) return null;
 
   async function install() {
     if (deferred) {
@@ -57,9 +64,7 @@ export default function InstallBanner() {
       const choice = await deferred.userChoice.catch(() => null);
       setDeferred(null);
       if (choice?.outcome === "accepted") setShow(false);
-      return;
     }
-    // iOS / no prompt — keep banner with instructions
   }
 
   function dismiss() {
@@ -77,7 +82,7 @@ export default function InstallBanner() {
         width: "min(440px, calc(100% - 24px))",
         zIndex: 50,
         background: "linear-gradient(135deg, rgba(20,20,32,0.98), rgba(12,12,20,0.98))",
-        border: "1px solid rgba(139,92,246,0.4)",
+        border: "1px solid rgba(139,92,246,0.45)",
         borderRadius: 16,
         padding: "14px 16px",
         boxShadow: "0 12px 40px rgba(0,0,0,0.5)",
@@ -87,56 +92,74 @@ export default function InstallBanner() {
       <div style={{ display: "flex", gap: 12, alignItems: "flex-start" }}>
         <div
           style={{
-            width: 44,
-            height: 44,
-            borderRadius: 12,
+            width: 44, height: 44, borderRadius: 12,
             background: "linear-gradient(135deg,#8b5cf6,#ec4899)",
-            flexShrink: 0,
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            fontWeight: 900,
-            fontSize: 18,
-            color: "#fff",
+            flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center",
+            fontWeight: 900, fontSize: 18, color: "#fff",
           }}
         >
           H
         </div>
         <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ fontWeight: 800, fontSize: 14, marginBottom: 2 }}>Install Hatch</div>
-          <p style={{ fontSize: 12, color: "#9494a8", lineHeight: 1.4 }}>
-            {ios
-              ? "Tap Share → Add to Home Screen — opens full-screen like Instagram"
-              : "Add to home screen · full-screen app, no browser bar"}
+          <div style={{ fontWeight: 800, fontSize: 14, marginBottom: 2 }}>
+            {ios ? "Add Hatch to iPhone" : "Install Hatch"}
+          </div>
+          <p style={{ fontSize: 12, color: "#9494a8", lineHeight: 1.45 }}>
+            {inApp
+              ? "Open this page in Safari (⋯ → Open in Safari), then Add to Home Screen"
+              : ios
+                ? "Safari → Share button → Add to Home Screen — works like a normal app"
+                : "Add to home screen · full-screen, no browser bar"}
           </p>
-          <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
+
+          {ios && expand && (
+            <div style={{ marginTop: 10, fontSize: 12, color: "#c4b5fd", lineHeight: 1.55 }}>
+              <p><strong>1.</strong> Tap the <strong>Share</strong> icon at the bottom (□ with ↑)</p>
+              <p><strong>2.</strong> Scroll down and tap <strong>Add to Home Screen</strong></p>
+              <p><strong>3.</strong> Tap <strong>Add</strong> — open Hatch from your home screen</p>
+            </div>
+          )}
+
+          <div style={{ display: "flex", gap: 8, marginTop: 10, flexWrap: "wrap" }}>
             {!ios && deferred && (
               <button
                 onClick={install}
                 style={{
                   background: "linear-gradient(135deg,#8b5cf6,#ec4899)",
-                  color: "#0a0a0f",
-                  fontWeight: 800,
-                  border: "none",
-                  borderRadius: 999,
-                  padding: "8px 16px",
-                  fontSize: 13,
-                  cursor: "pointer",
+                  color: "#0a0a0f", fontWeight: 800, border: "none",
+                  borderRadius: 999, padding: "8px 16px", fontSize: 13, cursor: "pointer",
                 }}
               >
                 Install
               </button>
             )}
+            {ios && (
+              <button
+                onClick={() => setExpand(!expand)}
+                style={{
+                  background: "linear-gradient(135deg,#8b5cf6,#ec4899)",
+                  color: "#0a0a0f", fontWeight: 800, border: "none",
+                  borderRadius: 999, padding: "8px 16px", fontSize: 13, cursor: "pointer",
+                }}
+              >
+                {expand ? "Hide steps" : "Show steps"}
+              </button>
+            )}
+            <Link
+              href="/install"
+              style={{
+                background: "rgba(255,255,255,0.08)", border: "1px solid rgba(255,255,255,0.12)",
+                color: "#e2e8f0", borderRadius: 999, padding: "8px 14px", fontSize: 13,
+                textDecoration: "none", fontWeight: 600,
+              }}
+            >
+              Full guide
+            </Link>
             <button
               onClick={dismiss}
               style={{
-                background: "rgba(255,255,255,0.06)",
-                border: "1px solid rgba(255,255,255,0.1)",
-                color: "#9494a8",
-                borderRadius: 999,
-                padding: "8px 14px",
-                fontSize: 13,
-                cursor: "pointer",
+                background: "transparent", border: "none", color: "#9494a8",
+                borderRadius: 999, padding: "8px 10px", fontSize: 13, cursor: "pointer",
               }}
             >
               Not now
