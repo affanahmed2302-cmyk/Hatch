@@ -2,7 +2,15 @@ import { supabase } from './supabase'
 
 export async function saveSparksProfile(
   userId: string,
-  fields: { headline?: string; vibe?: string; looking_for?: string; prompts?: string; consent?: boolean }
+  fields: {
+    headline?: string
+    vibe?: string
+    looking_for?: string
+    prompts?: string
+    gender?: string
+    meet_pref?: string
+    consent?: boolean
+  }
 ) {
   const payload: any = {
     user_id: userId,
@@ -10,12 +18,21 @@ export async function saveSparksProfile(
     vibe: (fields.vibe || '').trim() || null,
     looking_for: (fields.looking_for || '').trim() || null,
     prompts: (fields.prompts || '').trim() || null,
+    gender: (fields.gender || '').trim() || null,
+    meet_pref: (fields.meet_pref || '').trim() || null,
     is_visible: true,
     updated_at: new Date().toISOString(),
   }
   if (fields.consent) payload.consent_at = new Date().toISOString()
   const { error } = await supabase.from('sparks_profiles').upsert(payload)
   if (error) return { ok: false as const, error: error.message }
+
+  // mirror gender on main profile for confessions cues
+  if (fields.gender) {
+    try {
+      await supabase.from('profiles').update({ gender: fields.gender }).eq('id', userId)
+    } catch { /* optional */ }
+  }
   return { ok: true as const, error: null }
 }
 
@@ -30,7 +47,7 @@ export async function fetchSparksDeck(myId: string, limit = 30) {
 
     const { data: rows } = await supabase
       .from('sparks_profiles')
-      .select('user_id, headline, vibe, looking_for, prompts')
+      .select('user_id, headline, vibe, looking_for, prompts, gender, meet_pref')
       .eq('is_visible', true)
       .limit(80)
 
@@ -40,7 +57,7 @@ export async function fetchSparksDeck(myId: string, limit = 30) {
     const ids = candidates.map((c) => c.user_id)
     const { data: profs } = await supabase
       .from('profiles')
-      .select('id, full_name, username, avatar_url, department, year, bio')
+      .select('id, full_name, username, avatar_url, department, year, bio, gender')
       .in('id', ids)
     const map = Object.fromEntries((profs || []).map((p: any) => [p.id, p]))
     return candidates
@@ -98,7 +115,7 @@ export async function fetchMatches(myId: string) {
 
     const { data: profs } = await supabase
       .from('profiles')
-      .select('id, full_name, username, avatar_url, department, year')
+      .select('id, full_name, username, avatar_url, department, year, gender')
       .in('id', matchIds)
     const { data: sparks } = await supabase
       .from('sparks_profiles')
@@ -121,7 +138,6 @@ export async function fetchLikesYou(myId: string) {
     const ids = (rows || []).map((r) => r.from_id)
     if (!ids.length) return []
 
-    // hide already matched or already acted from my side as like
     const { data: iActed } = await supabase
       .from('sparks_likes')
       .select('to_id, liked')
@@ -134,7 +150,7 @@ export async function fetchLikesYou(myId: string) {
 
     const { data: profs } = await supabase
       .from('profiles')
-      .select('id, full_name, username, avatar_url, department')
+      .select('id, full_name, username, avatar_url, department, gender')
       .in('id', pending)
     return profs || []
   } catch {

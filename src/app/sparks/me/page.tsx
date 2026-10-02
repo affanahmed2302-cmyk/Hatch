@@ -2,19 +2,34 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { supabase, isSuperAdmin } from "@/lib/supabase";
-import { isFeatureOn } from "@/lib/features";
+import { supabase } from "@/lib/supabase";
 import { saveSparksProfile } from "@/lib/sparks";
 import SparksNav from "@/components/SparksNav";
 
+const GENDERS = ["Woman", "Man", "Non-binary", "Prefer not to say"];
+const VIBES = ["Chill", "Chaotic", "Gym & chai", "Night owl", "Soft girl/boy", "Ambivert", "Foodie", "Music head"];
+const LOOKING = ["Casual hangouts", "Something real", "Study + vibes", "Not sure yet", "Friends first"];
+const MEET = ["Nescafe", "Library", "Canteen", "Quad", "Weekend only", "Online first"];
+const PROMPT_IDEAS = [
+  "My ideal first hang on campus is…",
+  "You'll find me most at…",
+  "A green flag I notice is…",
+  "Worst CIE memory…",
+  "I'm looking for someone who…",
+];
+
 export default function SparksMePage() {
   const [userId, setUserId] = useState<string | null>(null);
+  const [avatar, setAvatar] = useState<string | null>(null);
   const [consent, setConsent] = useState(false);
+  const [gender, setGender] = useState("");
   const [headline, setHeadline] = useState("");
   const [vibe, setVibe] = useState("");
   const [looking, setLooking] = useState("");
+  const [meet, setMeet] = useState("");
   const [prompts, setPrompts] = useState("");
   const [msg, setMsg] = useState("");
+  const [err, setErr] = useState("");
   const [loading, setLoading] = useState(true);
   const router = useRouter();
 
@@ -22,15 +37,23 @@ export default function SparksMePage() {
     (async () => {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) { router.push("/login"); return; }
-      const on = await isFeatureOn("feature_sparks");
-      if (!on && !isSuperAdmin(user.email)) { router.replace("/home"); return; }
       setUserId(user.id);
+      const { data: prof } = await supabase
+        .from("profiles")
+        .select("avatar_url, gender, full_name")
+        .eq("id", user.id)
+        .maybeSingle();
+      if (prof?.avatar_url) setAvatar(prof.avatar_url);
+      if (prof?.gender) setGender(prof.gender);
+
       const { data } = await supabase.from("sparks_profiles").select("*").eq("user_id", user.id).maybeSingle();
       if (data) {
         setHeadline(data.headline || "");
         setVibe(data.vibe || "");
         setLooking(data.looking_for || "");
+        setMeet(data.meet_pref || "");
         setPrompts(data.prompts || "");
+        if (data.gender) setGender(data.gender);
         setConsent(!!data.consent_at);
       }
       setLoading(false);
@@ -39,12 +62,25 @@ export default function SparksMePage() {
 
   async function save() {
     if (!userId) return;
-    if (!consent) { setMsg("Confirm consent to continue"); return; }
+    setErr(""); setMsg("");
+    if (!consent) { setErr("Confirm 18+ consent"); return; }
+    if (!gender) { setErr("Pick how you identify (helps matching)"); return; }
+    if (!headline.trim() && !vibe) { setErr("Add a short intro or vibe"); return; }
+    if (!avatar) {
+      setErr("Add a profile photo on main Hatch profile first — dating needs a face");
+      return;
+    }
     const res = await saveSparksProfile(userId, {
-      headline, vibe, looking_for: looking, prompts, consent: true,
+      headline: headline || vibe,
+      vibe,
+      looking_for: looking,
+      meet_pref: meet,
+      prompts,
+      gender,
+      consent: true,
     });
-    if (!res.ok) setMsg(res.error || "Save failed");
-    else setMsg("Profile live on Discover");
+    if (!res.ok) setErr(res.error || "Save failed — run hatch_dating_fields.sql");
+    else setMsg("You're live on Sparks Discover");
   }
 
   if (loading) {
@@ -55,22 +91,86 @@ export default function SparksMePage() {
     <div className="shell" style={{ background: "#0a0610" }}>
       <div className="topbar" style={{ background: "linear-gradient(90deg,#be185d,#7c3aed)", border: "none" }}>
         <Link href="/home" className="btn-ghost btn-sm" style={{ color: "#fff" }}>Campus</Link>
-        <div style={{ fontWeight: 900, color: "#fff" }}>My Sparks</div>
+        <div style={{ fontWeight: 900, color: "#fff" }}>Dating profile</div>
       </div>
       <div className="page stack" style={{ paddingBottom: 90 }}>
-        <p className="muted" style={{ fontSize: 12 }}>
-          Separate dating app inside Hatch. Not shown on main Home unless admin enables the secret link.
+        <p className="muted" style={{ fontSize: 12, lineHeight: 1.45 }}>
+          This is for <strong>campus dating / hangouts</strong> — not jobs or GitHub.
+          Use a real photo + honest vibe.
         </p>
+
+        <div className="card" style={{ textAlign: "center" }}>
+          <div style={{
+            width: 88, height: 88, borderRadius: "50%", margin: "0 auto",
+            background: avatar ? `url(${avatar}) center/cover` : "linear-gradient(135deg,#be185d,#4c1d95)",
+            border: "2px solid rgba(244,114,182,0.5)",
+          }} />
+          {!avatar && (
+            <p className="muted" style={{ fontSize: 12, marginTop: 8 }}>
+              No photo yet → <Link href="/profile">add on main profile</Link>
+            </p>
+          )}
+        </div>
+
         <label className="row" style={{ gap: 8, alignItems: "center" }}>
           <input type="checkbox" checked={consent} onChange={(e) => setConsent(e.target.checked)} />
-          <span style={{ fontSize: 12 }}>I am 18+ and consent to optional matching</span>
+          <span style={{ fontSize: 12 }}>I am 18+ and want optional campus matching</span>
         </label>
-        <input value={headline} onChange={(e) => setHeadline(e.target.value)} placeholder="Headline" maxLength={80} />
-        <input value={vibe} onChange={(e) => setVibe(e.target.value)} placeholder="Your vibe" maxLength={120} />
-        <input value={looking} onChange={(e) => setLooking(e.target.value)} placeholder="Looking for" maxLength={120} />
-        <textarea value={prompts} onChange={(e) => setPrompts(e.target.value)} placeholder="Prompt / fun fact" rows={3} maxLength={280} />
+
+        <div>
+          <span className="label">I am</span>
+          <div className="row" style={{ gap: 6, flexWrap: "wrap" }}>
+            {GENDERS.map((g) => (
+              <button key={g} type="button" className={gender === g ? "btn btn-sm" : "btn-ghost btn-sm"} onClick={() => setGender(g)}>{g}</button>
+            ))}
+          </div>
+        </div>
+
+        <div>
+          <span className="label">One-line intro</span>
+          <input value={headline} onChange={(e) => setHeadline(e.target.value)} placeholder="e.g. 2nd year · love late walks + filter coffee" maxLength={80} />
+        </div>
+
+        <div>
+          <span className="label">Vibe</span>
+          <div className="row" style={{ gap: 6, flexWrap: "wrap" }}>
+            {VIBES.map((v) => (
+              <button key={v} type="button" className={vibe === v ? "btn btn-sm" : "btn-ghost btn-sm"} onClick={() => setVibe(v)}>{v}</button>
+            ))}
+          </div>
+        </div>
+
+        <div>
+          <span className="label">Looking for</span>
+          <div className="row" style={{ gap: 6, flexWrap: "wrap" }}>
+            {LOOKING.map((v) => (
+              <button key={v} type="button" className={looking === v ? "btn btn-sm" : "btn-ghost btn-sm"} onClick={() => setLooking(v)}>{v}</button>
+            ))}
+          </div>
+        </div>
+
+        <div>
+          <span className="label">Prefer to meet at</span>
+          <div className="row" style={{ gap: 6, flexWrap: "wrap" }}>
+            {MEET.map((v) => (
+              <button key={v} type="button" className={meet === v ? "btn btn-sm" : "btn-ghost btn-sm"} onClick={() => setMeet(v)}>{v}</button>
+            ))}
+          </div>
+        </div>
+
+        <div>
+          <span className="label">Prompt answer</span>
+          <div className="row" style={{ gap: 6, flexWrap: "wrap", marginBottom: 8 }}>
+            {PROMPT_IDEAS.map((p) => (
+              <button key={p} type="button" className="btn-ghost btn-sm" style={{ fontSize: 11 }} onClick={() => setPrompts(p + " ")}>{p.slice(0, 28)}…</button>
+            ))}
+          </div>
+          <textarea value={prompts} onChange={(e) => setPrompts(e.target.value)} placeholder="Finish a prompt…" rows={3} maxLength={280} />
+        </div>
+
         {msg && <div className="ok">{msg}</div>}
-        <button className="btn" onClick={save}>Save & show on Discover</button>
+        {err && <div className="fail">{err}</div>}
+        <button className="btn" onClick={save}>Save dating profile</button>
         <Link href="/sparks" className="btn-ghost" style={{ textAlign: "center" }}>Start discovering →</Link>
       </div>
       <SparksNav />
