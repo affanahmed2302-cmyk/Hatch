@@ -5,6 +5,7 @@ import Link from "next/link";
 import { supabase, displayName, yearToLabel, isSuperAdmin } from "@/lib/supabase";
 import { hasActiveMembership } from "@/lib/membership";
 import { fetchSparksDeck, sparkSwipe } from "@/lib/sparks";
+import { GROWTH } from "@/lib/growth";
 import Paywall from "@/components/Paywall";
 import SparksNav from "@/components/SparksNav";
 
@@ -20,7 +21,10 @@ export default function SparksDiscoverPage() {
   const router = useRouter();
 
   async function gate(uid: string, em?: string | null) {
-    const ok = isSuperAdmin(em) || (await hasActiveMembership(uid, "sparks"));
+    const ok =
+      GROWTH.sparksFree ||
+      isSuperAdmin(em) ||
+      (await hasActiveMembership(uid, "sparks"));
     setPaid(ok);
     return ok;
   }
@@ -71,24 +75,15 @@ export default function SparksDiscoverPage() {
           <div style={{ fontWeight: 900, color: "#fff" }}>Campus Sparks</div>
         </div>
         <div className="page">
-          <div className="card" style={{ marginBottom: 12, background: "linear-gradient(135deg,rgba(236,72,153,0.2),rgba(124,58,237,0.15))" }}>
-            <div style={{ fontWeight: 900, fontSize: 22 }}>Dating for BMSCE</div>
-            <p className="muted" style={{ fontSize: 13, marginTop: 8, lineHeight: 1.5 }}>
-              Swipe students from your campus network. Matches open real chat.
-              Built for college — year, dept, hostel vibes. Not a random public app.
-            </p>
+          <div className="card" style={{ marginBottom: 12 }}>
+            <div style={{ fontWeight: 900, fontSize: 20 }}>Campus Sparks</div>
+            <p className="muted" style={{ fontSize: 13, marginTop: 8 }}>Secondary dating layer · campus only</p>
           </div>
           {userId && (
             <Paywall
               product="sparks"
               userId={userId}
-              bullets={[
-                "Unlimited Discover swipes",
-                "See who liked you",
-                "Matches → Hatch chat",
-                "Campus-only profiles",
-                "Cancel anytime · ₹150/month",
-              ]}
+              bullets={["Unlimited swipes", "Likes & matches", "Campus-only"]}
               onUnlocked={async () => {
                 if (userId) {
                   await gate(userId, email);
@@ -109,6 +104,9 @@ export default function SparksDiscoverPage() {
       <div className="topbar" style={{ background: "linear-gradient(90deg,#be185d,#7c3aed)", border: "none" }}>
         <Link href="/home" className="btn-ghost btn-sm" style={{ color: "#fff" }}>Campus</Link>
         <div style={{ fontWeight: 900, color: "#fff", fontSize: 15 }}>Sparks</div>
+        {GROWTH.sparksFree && (
+          <span className="badge" style={{ marginLeft: 8, background: "#10b981", color: "#fff", fontSize: 10 }}>FREE launch</span>
+        )}
         <Link href="/sparks/me" className="btn-ghost btn-sm" style={{ marginLeft: "auto", color: "#fff" }}>Profile</Link>
       </div>
       <div className="page" style={{ paddingBottom: 90 }}>
@@ -127,8 +125,7 @@ export default function SparksDiscoverPage() {
         {!card ? (
           <div className="empty" style={{ padding: 40 }}>
             <p style={{ fontWeight: 800 }}>No more profiles</p>
-            <p className="muted" style={{ fontSize: 13 }}>Update your Sparks profile or check Likes</p>
-            <Link href="/sparks/me" className="btn" style={{ marginTop: 12 }}>Edit profile</Link>
+            <Link href="/sparks/me" className="btn" style={{ marginTop: 12 }}>Edit Sparks profile</Link>
           </div>
         ) : (
           <div className="card" style={{ padding: 0, overflow: "hidden", marginBottom: 14, border: "1px solid rgba(244,114,182,0.35)" }}>

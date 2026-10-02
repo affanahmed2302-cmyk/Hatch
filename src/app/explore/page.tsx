@@ -3,7 +3,6 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { supabase, isSuperAdmin } from "@/lib/supabase";
-import { isFeatureOn } from "@/lib/features";
 import { blackoutCountdown, isMidnightBlackout } from "@/lib/legendary";
 import { EcosystemPortalGrid } from "@/components/EcosystemGateway";
 import MidnightBlackout from "@/components/MidnightBlackout";
@@ -12,7 +11,6 @@ import Nav from "@/components/Nav";
 export default function ExplorePage() {
   const [uid, setUid] = useState<string | null>(null);
   const [email, setEmail] = useState("");
-  const [sparksFlag, setSparksFlag] = useState(true);
   const [loading, setLoading] = useState(true);
   const router = useRouter();
 
@@ -22,9 +20,6 @@ export default function ExplorePage() {
       if (!user) { router.push("/login"); return; }
       setUid(user.id);
       setEmail(user.email || "");
-      // Sparks is always marketed; paywall is inside the app
-      setSparksFlag(true);
-      void isFeatureOn("feature_sparks");
       setLoading(false);
     })();
   }, [router]);
@@ -41,50 +36,48 @@ export default function ExplorePage() {
       </div>
       <div className="page">
         <p className="muted" style={{ fontSize: 13, marginBottom: 14 }}>
-          Premium experiences & campus tools.
+          Balanced campus network · career · social · sparks
         </p>
-
-        <Link href="/sparks" className="card" style={{
-          display: "block", marginBottom: 10, textDecoration: "none", color: "inherit",
-          background: "linear-gradient(135deg,rgba(236,72,153,0.22),rgba(124,58,237,0.15))",
-          border: "1px solid rgba(244,114,182,0.45)",
-        }}>
-          <div style={{ fontWeight: 900, fontSize: 17 }}>Campus Sparks · Dating</div>
-          <p className="muted" style={{ fontSize: 12, marginTop: 4 }}>
-            Swipe · match · chat · BMSCE only · <strong>₹150/month</strong>
-          </p>
-        </Link>
-
-        <Link href="/legends" className="card" style={{
-          display: "block", marginBottom: 10, textDecoration: "none", color: "inherit",
-          background: "linear-gradient(135deg,rgba(251,191,36,0.2),rgba(120,53,15,0.2))",
-          border: "1px solid rgba(251,191,36,0.45)",
-        }}>
-          <div style={{ fontWeight: 900, fontSize: 17 }}>Legends of BMSCE</div>
-          <p className="muted" style={{ fontSize: 12, marginTop: 4 }}>
-            Private society chatbox · <strong>₹999/month</strong>
-          </p>
-        </Link>
-
-        <Link href="/install" className="card" style={{
-          display: "block", marginBottom: 12, textDecoration: "none", color: "inherit",
-        }}>
-          <div style={{ fontWeight: 800 }}>Install Hatch on phone</div>
-          <p className="muted" style={{ fontSize: 12 }}>Add to Home Screen · works like an app</p>
-        </Link>
 
         <MidnightBlackout userId={uid} />
         {!isMidnightBlackout() && (
           <p className="muted" style={{ fontSize: 11, marginBottom: 12 }}>{blackoutCountdown()}</p>
         )}
 
+        <div style={{ fontWeight: 700, fontSize: 12, marginBottom: 8, opacity: 0.7 }}>CAMPUS CORE</div>
         {[
-          { href: "/radar", title: "Quantum Radar", blurb: "Nearby intents · burner chats" },
-          { href: "/ghost", title: "Ghost Teammate", blurb: "AI hackathon squad" },
-          { href: "/teams", title: "Teams", blurb: "Project teammates" },
-          { href: "/clubs", title: "Clubs", blurb: "Campus clubs" },
+          { href: "/teams", title: "Teams", blurb: "Project teammates · hackathons" },
+          { href: "/clubs", title: "Clubs", blurb: "Club cores & events" },
+          { href: "/lounge", title: "Lounge", blurb: "Open campus chat" },
           { href: "/leaderboard", title: "Leaderboard", blurb: "Rep ranks" },
-          { href: "/premium", title: "Hatch Premium", blurb: "₹120 · Private Circle" },
+        ].map((t) => (
+          <Link key={t.href} href={t.href} className="card" style={{
+            display: "block", marginBottom: 8, textDecoration: "none", color: "inherit",
+          }}>
+            <div style={{ fontWeight: 700 }}>{t.title}</div>
+            <p className="muted" style={{ fontSize: 12 }}>{t.blurb}</p>
+          </Link>
+        ))}
+
+        <div style={{ fontWeight: 700, fontSize: 12, margin: "14px 0 8px", opacity: 0.7 }}>SECONDARY</div>
+        <Link href="/sparks" className="card" style={{
+          display: "block", marginBottom: 8, textDecoration: "none", color: "inherit",
+          border: "1px solid rgba(244,114,182,0.35)",
+        }}>
+          <div style={{ fontWeight: 800 }}>Campus Sparks</div>
+          <p className="muted" style={{ fontSize: 12 }}>Dating · free during launch · not on home</p>
+        </Link>
+        <Link href="/legends" className="card" style={{
+          display: "block", marginBottom: 8, textDecoration: "none", color: "inherit",
+        }}>
+          <div style={{ fontWeight: 700 }}>Legends of BMSCE</div>
+          <p className="muted" style={{ fontSize: 12 }}>Optional society chat</p>
+        </Link>
+
+        {[
+          { href: "/radar", title: "Quantum Radar", blurb: "Nearby intents" },
+          { href: "/ghost", title: "Ghost Teammate", blurb: "AI squad" },
+          { href: "/install", title: "Install app", blurb: "Home screen" },
         ].map((t) => (
           <Link key={t.href} href={t.href} className="card" style={{
             display: "block", marginBottom: 8, textDecoration: "none", color: "inherit",
@@ -102,7 +95,7 @@ export default function ExplorePage() {
         )}
 
         <div className="card" style={{ marginTop: 14 }}>
-          <div className="h2" style={{ marginBottom: 8 }}>Outside links</div>
+          <div className="h2" style={{ marginBottom: 8 }}>Sister apps</div>
           <EcosystemPortalGrid compact />
         </div>
       </div>
