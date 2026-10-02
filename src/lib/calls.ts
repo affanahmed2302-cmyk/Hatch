@@ -35,6 +35,16 @@ export async function startCall(callerId: string, calleeId: string, callType: 'a
         call: null,
       }
     }
+
+    // Chat ping so peer sees something even without realtime
+    try {
+      await supabase.from('messages').insert({
+        sender_id: callerId,
+        receiver_id: calleeId,
+        content: callType === 'audio' ? '📞 Incoming audio call — open Hatch to answer' : '📹 Incoming video call — open Hatch to answer',
+      })
+    } catch { /* optional */ }
+
     return { ok: true as const, error: null, call: data as CallRow }
   } catch (e: any) {
     return { ok: false as const, error: e?.message || 'Call failed', call: null }

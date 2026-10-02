@@ -7,9 +7,18 @@ import { fetchFreeNow, setFreeNow, haptic, playPing } from "@/lib/obsession";
 import { bumpOpenStreak, streakTier } from "@/lib/engagement";
 import { fetchFeedEvents } from "@/lib/clubCore";
 import { isMidnightBlackout, blackoutCountdown } from "@/lib/legendary";
+import { ensureNotifyPermission } from "@/lib/notify";
 import Nav from "@/components/Nav";
 
 const PLACES = ["Library", "Canteen", "Nescafe", "Quad", "Main gate"];
+
+const PLACE_EMOJI: Record<string, string> = {
+  Library: "📚",
+  Canteen: "🍽️",
+  Nescafe: "☕",
+  Quad: "🌳",
+  "Main gate": "🚪",
+};
 
 export default function HomePage() {
   const [myId, setMyId] = useState<string | null>(null);
@@ -43,6 +52,7 @@ export default function HomePage() {
       if (!user) { router.push("/login"); return; }
       setMyId(user.id);
       touchPresence(user.id);
+      ensureNotifyPermission();
       setStreak(await bumpOpenStreak(user.id));
       const { data: prof } = await supabase
         .from("profiles")
@@ -62,7 +72,7 @@ export default function HomePage() {
     const res = await setFreeNow(myId, place);
     if (!res.ok) setErr(res.error || "Failed");
     else {
-      setMsg("Free at " + place);
+      setMsg("You're live at " + place + " · others can ping you");
       haptic([10, 20, 10]);
       playPing();
       await refresh(myId);
@@ -111,7 +121,6 @@ export default function HomePage() {
           </p>
         </div>
 
-        {/* Primary actions — only 3 */}
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 12 }}>
           <Link href="/discover" className="card" style={{
             textDecoration: "none", color: "inherit", margin: 0,
@@ -154,26 +163,71 @@ export default function HomePage() {
           </Link>
         )}
 
-        {/* Free now — one simple block */}
-        <div className="card" style={{ marginBottom: 12 }}>
-          <div className="row" style={{ marginBottom: 8 }}>
-            <div style={{ fontWeight: 700, fontSize: 14, flex: 1 }}>Free right now</div>
-            <span className="badge">{free.length}</span>
+        {/* FREE NOW — attractive live cards */}
+        <div className="card" style={{
+          marginBottom: 12,
+          border: "1px solid rgba(52,211,153,0.35)",
+          background: "linear-gradient(160deg,rgba(16,185,129,0.12),rgba(6,78,59,0.15))",
+        }}>
+          <div className="row" style={{ marginBottom: 10 }}>
+            <div style={{ flex: 1 }}>
+              <div style={{ fontWeight: 800, fontSize: 15 }}>🟢 Free on campus</div>
+              <p className="muted" style={{ fontSize: 11 }}>Tap a place · live 15 min · others can ping</p>
+            </div>
+            <span className="badge" style={{ background: "#10b981", color: "#fff" }}>{free.length} live</span>
           </div>
-          <div className="row" style={{ gap: 6, flexWrap: "wrap", marginBottom: free.length ? 10 : 0 }}>
+
+          <div className="row" style={{ gap: 6, flexWrap: "wrap", marginBottom: 12 }}>
             {PLACES.map((p) => (
-              <button key={p} className="chip" onClick={() => goFree(p)}>{p}</button>
+              <button key={p} className="chip" onClick={() => goFree(p)} style={{
+                borderColor: "rgba(52,211,153,0.4)",
+              }}>
+                {(PLACE_EMOJI[p] || "📍") + " " + p}
+              </button>
             ))}
           </div>
-          {free.slice(0, 4).map((f: any) => (
-            <div key={f.id} className="row" style={{ gap: 8, marginTop: 6, alignItems: "center" }}>
-              <span style={{ fontSize: 13, flex: 1 }}>
-                <strong>{displayName(f.profile || {})}</strong>
-                <span className="muted"> · {f.place}</span>
-              </span>
-              <Link href={"/chat/" + f.user_id} className="btn-ghost btn-sm">Ping</Link>
+
+          {free.map((f: any) => (
+            <div
+              key={f.id}
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: 12,
+                marginBottom: 10,
+                padding: 12,
+                borderRadius: 14,
+                background: "rgba(0,0,0,0.25)",
+                border: "1px solid rgba(52,211,153,0.25)",
+              }}
+            >
+              <div style={{
+                width: 44, height: 44, borderRadius: "50%",
+                background: f.profile?.avatar_url
+                  ? `url(${f.profile.avatar_url}) center/cover`
+                  : "var(--grad-cool)",
+                flexShrink: 0,
+              }} />
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontWeight: 800, fontSize: 14 }}>{displayName(f.profile || {})}</div>
+                <p style={{ fontSize: 13, marginTop: 2 }}>
+                  {(PLACE_EMOJI[f.place] || "📍") + " "}
+                  <strong style={{ color: "#6ee7b7" }}>at {f.place}</strong>
+                  <span className="muted"> · right now</span>
+                </p>
+              </div>
+              <Link
+                href={"/chat/" + f.user_id}
+                className="btn btn-sm"
+                style={{ background: "linear-gradient(135deg,#10b981,#059669)", color: "#fff", boxShadow: "none" }}
+              >
+                Ping
+              </Link>
             </div>
           ))}
+          {!free.length && (
+            <p className="muted" style={{ fontSize: 12 }}>Nobody live yet — be first at Nescafe or Library</p>
+          )}
         </div>
 
         {clubEvents.length > 0 && (
@@ -188,7 +242,6 @@ export default function HomePage() {
           </div>
         )}
 
-        {/* Pulse — simple campus board */}
         <div className="card" style={{ marginBottom: 12 }}>
           <div style={{ fontWeight: 700, fontSize: 14, marginBottom: 8 }}>Campus pulse</div>
           <div className="row" style={{ gap: 8, marginBottom: 10 }}>
@@ -209,9 +262,7 @@ export default function HomePage() {
           {!pulseList.length && <p className="muted" style={{ fontSize: 12 }}>Nothing yet — post first</p>}
         </div>
 
-        <Link href="/explore" className="btn-ghost" style={{
-          display: "block", textAlign: "center", marginBottom: 8,
-        }}>
+        <Link href="/explore" className="btn-ghost" style={{ display: "block", textAlign: "center", marginBottom: 8 }}>
           More tools · Radar, Ghost, Clubs…
         </Link>
       </div>
