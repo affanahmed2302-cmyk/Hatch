@@ -1,4 +1,5 @@
-import { supabase, jitsiRoom, jitsiEmbedUrl } from './supabase'
+import { supabase, jitsiRoom, jitsiEmbedUrl, displayName } from './supabase'
+import { notifyCallPush } from './pushClient'
 
 export type CallRow = {
   id: string
@@ -36,13 +37,25 @@ export async function startCall(callerId: string, calleeId: string, callType: 'a
       }
     }
 
-    // Chat ping so peer sees something even without realtime
     try {
       await supabase.from('messages').insert({
         sender_id: callerId,
         receiver_id: calleeId,
-        content: callType === 'audio' ? '📞 Incoming audio call — open Hatch to answer' : '📹 Incoming video call — open Hatch to answer',
+        content: callType === 'audio'
+          ? '📞 Incoming audio call — open Hatch to answer'
+          : '📹 Incoming video call — open Hatch to answer',
       })
+    } catch { /* optional */ }
+
+    // Background ring (works when app closed if push subscribed)
+    try {
+      const { data: me } = await supabase
+        .from('profiles')
+        .select('full_name, username')
+        .eq('id', callerId)
+        .maybeSingle()
+      const who = displayName(me || {}) || 'Someone'
+      void notifyCallPush(calleeId, who, callType)
     } catch { /* optional */ }
 
     return { ok: true as const, error: null, call: data as CallRow }
