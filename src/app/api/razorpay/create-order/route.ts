@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { requireUser, apiRateLimit, securityHeaders } from "@/lib/security";
 
 const PRODUCTS: Record<string, { amount: number; name: string }> = {
   sparks: { amount: 150, name: "Campus Sparks" },
@@ -7,13 +8,22 @@ const PRODUCTS: Record<string, { amount: number; name: string }> = {
 };
 
 export async function POST(req: NextRequest) {
+  const headers = securityHeaders();
   try {
+    const { user, error: authErr } = await requireUser(req);
+    if (!user) {
+      return NextResponse.json({ error: authErr || "Unauthorized" }, { status: 401, headers });
+    }
+    if (!apiRateLimit(`rzp-order:${user.id}`, 10, 60_000)) {
+      return NextResponse.json({ error: "Too many requests" }, { status: 429, headers });
+    }
+
     const keyId = process.env.RAZORPAY_KEY_ID || process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID;
     const keySecret = process.env.RAZORPAY_KEY_SECRET;
     if (!keyId || !keySecret) {
       return NextResponse.json(
         { error: "Razorpay keys not configured on server" },
-        { status: 503 }
+        { status: 503, headers }
       );
     }
 
@@ -23,18 +33,18 @@ export async function POST(req: NextRequest) {
     const userId = String(body.user_id || "");
     const coupon = body.coupon ? String(body.coupon) : "";
 
-    if (!PRODUCTS[product]) {
-      return NextResponse.json({ error: "Invalid product" }, { status: 400 });
+    // Never trust client user_id — must match session
+    if (userId !== user.id) {
+      return NextResponse.json({ error: "User mismatch" }, { status: 403, headers });
     }
-    if (!userId) {
-      return NextResponse.json({ error: "user_id required" }, { status: 400 });
+    if (!PRODUCTS[product]) {
+      return NextResponse.json({ error: "Invalid product" }, { status: 400, headers });
     }
     if (!Number.isFinite(amountInr) || amountInr < 1) {
-      return NextResponse.json({ error: "Invalid amount" }, { status: 400 });
+      return NextResponse.json({ error: "Invalid amount" }, { status: 400, headers });
     }
-    // Cap at product max (coupons can lower)
     if (amountInr > PRODUCTS[product].amount) {
-      return NextResponse.json({ error: "Amount too high" }, { status: 400 });
+      return NextResponse.json({ error: "Amount too high" }, { status: 400, headers });
     }
 
     const amountPaise = Math.round(amountInr * 100);
@@ -64,19 +74,22 @@ export async function POST(req: NextRequest) {
     if (!rzRes.ok) {
       return NextResponse.json(
         { error: data?.error?.description || "Razorpay order failed" },
-        { status: 400 }
+        { status: 400, headers }
       );
     }
 
-    return NextResponse.json({
-      order_id: data.id,
-      amount: data.amount,
-      currency: data.currency,
-      key_id: keyId,
-      product,
-      amount_inr: amountInr,
-    });
+    return NextResponse.json(
+      {
+        order_id: data.id,
+        amount: data.amount,
+        currency: data.currency,
+        key_id: keyId,
+        product,
+        amount_inr: amountInr,
+      },
+      { headers }
+    );
   } catch (e: any) {
-    return NextResponse.json({ error: e?.message || "Server error" }, { status: 500 });
+    return NextResponse.json({ error: e?.message || "Server error" }, { status: 500, headers });
   }
 }

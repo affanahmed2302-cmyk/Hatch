@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import crypto from "crypto";
-import { createClient } from "@supabase/supabase-js";
+import { requireUser, apiRateLimit, securityHeaders, supabaseService } from "@/lib/security";
 
 const PRODUCTS: Record<string, { amount: number; days: number }> = {
   sparks: { amount: 150, days: 30 },
@@ -8,20 +8,20 @@ const PRODUCTS: Record<string, { amount: number; days: number }> = {
   premium: { amount: 120, days: 30 },
 };
 
-function supabaseAdmin() {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL || "https://ahtabgrlkyjjjqxvndlb.supabase.co";
-  const key =
-    process.env.SUPABASE_SERVICE_ROLE_KEY ||
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ||
-    "sb_publishable_3YcwyaHxFjIcacIPNsxDWQ_IreLbFRE";
-  return createClient(url, key);
-}
-
 export async function POST(req: NextRequest) {
+  const headers = securityHeaders();
   try {
+    const { user, error: authErr } = await requireUser(req);
+    if (!user) {
+      return NextResponse.json({ error: authErr || "Unauthorized" }, { status: 401, headers });
+    }
+    if (!apiRateLimit(`rzp-verify:${user.id}`, 15, 60_000)) {
+      return NextResponse.json({ error: "Too many requests" }, { status: 429, headers });
+    }
+
     const keySecret = process.env.RAZORPAY_KEY_SECRET;
     if (!keySecret) {
-      return NextResponse.json({ error: "Razorpay secret missing" }, { status: 503 });
+      return NextResponse.json({ error: "Razorpay secret missing" }, { status: 503, headers });
     }
 
     const body = await req.json();
@@ -35,11 +35,14 @@ export async function POST(req: NextRequest) {
       coupon,
     } = body;
 
-    if (!razorpay_order_id || !razorpay_payment_id || !razorpay_signature) {
-      return NextResponse.json({ error: "Missing payment fields" }, { status: 400 });
+    if (user_id !== user.id) {
+      return NextResponse.json({ error: "User mismatch" }, { status: 403, headers });
     }
-    if (!PRODUCTS[product] || !user_id) {
-      return NextResponse.json({ error: "Invalid product or user" }, { status: 400 });
+    if (!razorpay_order_id || !razorpay_payment_id || !razorpay_signature) {
+      return NextResponse.json({ error: "Missing payment fields" }, { status: 400, headers });
+    }
+    if (!PRODUCTS[product]) {
+      return NextResponse.json({ error: "Invalid product" }, { status: 400, headers });
     }
 
     const expected = crypto
@@ -48,16 +51,26 @@ export async function POST(req: NextRequest) {
       .digest("hex");
 
     if (expected !== razorpay_signature) {
-      return NextResponse.json({ error: "Invalid payment signature" }, { status: 400 });
+      return NextResponse.json({ error: "Invalid payment signature" }, { status: 400, headers });
+    }
+
+    const sb = supabaseService();
+    if (!sb) {
+      return NextResponse.json(
+        { error: "Server misconfigured: set SUPABASE_SERVICE_ROLE_KEY on Vercel" },
+        { status: 503, headers }
+      );
     }
 
     const days = PRODUCTS[product].days;
     const ends = new Date(Date.now() + days * 86400000).toISOString();
-    const amount = Number(amount_inr) || PRODUCTS[product].amount;
-    const sb = supabaseAdmin();
+    const amount = Math.min(
+      Number(amount_inr) || PRODUCTS[product].amount,
+      PRODUCTS[product].amount
+    );
 
     const { error: memErr } = await sb.from("memberships").insert({
-      user_id,
+      user_id: user.id,
       product,
       status: "active",
       ends_at: ends,
@@ -66,15 +79,11 @@ export async function POST(req: NextRequest) {
       payment_ref: razorpay_payment_id,
     });
 
-    if (memErr) {
-      // still mark verified — client can retry activate
-      return NextResponse.json({
-        ok: true,
-        verified: true,
-        membership_error: memErr.message,
-        ends,
-        payment_id: razorpay_payment_id,
-      });
+    if (memErr && !String(memErr.message).toLowerCase().includes("duplicate")) {
+      return NextResponse.json(
+        { ok: false, error: memErr.message },
+        { status: 400, headers }
+      );
     }
 
     if (product === "premium") {
@@ -85,18 +94,21 @@ export async function POST(req: NextRequest) {
           premium_until: ends,
           updated_at: new Date().toISOString(),
         })
-        .eq("id", user_id);
+        .eq("id", user.id);
     }
 
     if (coupon) {
-      const { data: c } = await sb.from("coupons").select("used_count").eq("code", coupon).maybeSingle();
+      const { data: c } = await sb.from("coupons").select("used_count").eq("code", String(coupon).toUpperCase()).maybeSingle();
       if (c) {
-        await sb.from("coupons").update({ used_count: (c.used_count || 0) + 1 }).eq("code", coupon);
+        await sb
+          .from("coupons")
+          .update({ used_count: (c.used_count || 0) + 1 })
+          .eq("code", String(coupon).toUpperCase());
       }
     }
 
     await sb.from("payment_orders").insert({
-      user_id,
+      user_id: user.id,
       product,
       amount_inr: amount,
       coupon_code: coupon || null,
@@ -105,13 +117,11 @@ export async function POST(req: NextRequest) {
       reviewed_at: new Date().toISOString(),
     });
 
-    return NextResponse.json({
-      ok: true,
-      verified: true,
-      ends,
-      payment_id: razorpay_payment_id,
-    });
+    return NextResponse.json(
+      { ok: true, verified: true, ends, payment_id: razorpay_payment_id },
+      { headers }
+    );
   } catch (e: any) {
-    return NextResponse.json({ error: e?.message || "Verify failed" }, { status: 500 });
+    return NextResponse.json({ error: e?.message || "Verify failed" }, { status: 500, headers });
   }
 }

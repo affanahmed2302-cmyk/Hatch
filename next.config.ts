@@ -1,7 +1,22 @@
 import type { NextConfig } from "next";
+
 const nextConfig: NextConfig = {
   reactStrictMode: true,
-  // Only build the new app at repo root (ignore mesh-phase1)
   pageExtensions: ["tsx", "ts", "jsx", "js"],
+  poweredByHeader: false,
+  async headers() {
+    return [
+      {
+        source: "/(.*)",
+        headers: [
+          { key: "X-Content-Type-Options", value: "nosniff" },
+          { key: "X-Frame-Options", value: "DENY" },
+          { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
+          { key: "Permissions-Policy", value: "camera=(self), microphone=(self), geolocation=(self)" },
+        ],
+      },
+    ];
+  },
 };
+
 export default nextConfig;
