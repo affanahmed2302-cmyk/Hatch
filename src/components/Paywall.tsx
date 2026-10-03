@@ -1,14 +1,23 @@
 "use client";
 import { useEffect, useState } from "react";
+import { supabase } from "@/lib/supabase";
 import {
-  PRODUCTS, ProductId, UPI_DISPLAY, UPI_NUMBER, upiPayUrl,
-  validateCoupon, priceAfterCoupon, submitPaymentOrder, activateMembership,
+  PRODUCTS, ProductId, UPI_DISPLAY, upiPayUrl,
+  validateCoupon, priceAfterCoupon, submitPaymentOrder,
 } from "@/lib/membership";
 
 declare global {
   interface Window {
     Razorpay?: any;
   }
+}
+
+async function authHeaders(): Promise<Record<string, string>> {
+  const { data } = await supabase.auth.getSession();
+  const token = data.session?.access_token;
+  const h: Record<string, string> = { "Content-Type": "application/json" };
+  if (token) h.Authorization = `Bearer ${token}`;
+  return h;
 }
 
 function loadRazorpayScript(): Promise<boolean> {
@@ -48,9 +57,7 @@ export default function Paywall({
   const publicKey = process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID || "";
 
   useEffect(() => {
-    if (publicKey) {
-      loadRazorpayScript().then(setRzReady);
-    }
+    if (publicKey) loadRazorpayScript().then(setRzReady);
   }, [publicKey]);
 
   async function applyCoupon() {
@@ -61,12 +68,37 @@ export default function Paywall({
     setErr("");
   }
 
+  async function redeemFreeCoupon() {
+    setBusy(true); setErr(""); setMsg("");
+    try {
+      const res = await fetch("/api/membership/redeem", {
+        method: "POST",
+        headers: await authHeaders(),
+        body: JSON.stringify({
+          product,
+          coupon: coupon.trim().toUpperCase(),
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setErr(data.error || "Redeem failed — set SUPABASE_SERVICE_ROLE_KEY");
+        setBusy(false);
+        return;
+      }
+      setMsg("Unlocked with coupon!");
+      onUnlocked?.();
+    } catch (e: any) {
+      setErr(e?.message || "Redeem error");
+    }
+    setBusy(false);
+  }
+
   async function payRazorpay() {
     setBusy(true); setErr(""); setMsg("");
     try {
       const orderRes = await fetch("/api/razorpay/create-order", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: await authHeaders(),
         body: JSON.stringify({
           product,
           amount_inr: amount,
@@ -99,7 +131,7 @@ export default function Paywall({
           try {
             const vRes = await fetch("/api/razorpay/verify", {
               method: "POST",
-              headers: { "Content-Type": "application/json" },
+              headers: await authHeaders(),
               body: JSON.stringify({
                 razorpay_order_id: response.razorpay_order_id,
                 razorpay_payment_id: response.razorpay_payment_id,
@@ -116,13 +148,6 @@ export default function Paywall({
               setBusy(false);
               return;
             }
-            if (v.membership_error) {
-              // fallback client activate
-              await activateMembership(userId, product, amount, {
-                coupon: couponOk ? coupon.trim().toUpperCase() : undefined,
-                payment_ref: response.razorpay_payment_id,
-              });
-            }
             setMsg("Payment success · unlocked!");
             onUnlocked?.();
           } catch (e: any) {
@@ -130,9 +155,7 @@ export default function Paywall({
           }
           setBusy(false);
         },
-        modal: {
-          ondismiss: () => setBusy(false),
-        },
+        modal: { ondismiss: () => setBusy(false) },
         theme: { color: "#8b5cf6" },
       });
       rzp.on("payment.failed", (resp: any) => {
@@ -147,22 +170,21 @@ export default function Paywall({
   }
 
   async function submitUpi() {
+    if (amount === 0) {
+      await redeemFreeCoupon();
+      return;
+    }
     setBusy(true); setErr(""); setMsg("");
     const res = await submitPaymentOrder(
       userId,
       product,
       amount,
-      amount === 0 ? "FREE" : ref,
+      ref,
       couponOk ? coupon.trim().toUpperCase() : undefined
     );
     setBusy(false);
-    if (!res.ok) setErr(res.error || "Failed — run hatch_membership.sql");
-    else if (amount === 0) {
-      setMsg("Unlocked with coupon!");
-      onUnlocked?.();
-    } else {
-      setMsg("UPI submitted · admin will approve soon");
-    }
+    if (!res.ok) setErr(res.error || "Failed");
+    else setMsg("UPI submitted · admin will approve soon");
   }
 
   return (
@@ -187,7 +209,7 @@ export default function Paywall({
       {err && <div className="fail">{err}</div>}
 
       {amount === 0 ? (
-        <button className="btn" disabled={busy} onClick={submitUpi}>Unlock free with coupon</button>
+        <button className="btn" disabled={busy} onClick={redeemFreeCoupon}>Unlock free with coupon</button>
       ) : (
         <>
           {publicKey ? (
@@ -196,7 +218,7 @@ export default function Paywall({
             </button>
           ) : (
             <p className="muted" style={{ fontSize: 12 }}>
-              Razorpay key not set — using UPI fallback. Add NEXT_PUBLIC_RAZORPAY_KEY_ID on Vercel.
+              Add Razorpay keys on Vercel for instant pay — UPI fallback below.
             </p>
           )}
 
@@ -215,8 +237,7 @@ export default function Paywall({
       )}
 
       <p className="muted" style={{ fontSize: 11 }}>
-        Razorpay unlocks instantly after success. Coupons still work. UPI needs admin approve if used.
-        {rzReady ? " · Checkout ready" : ""}
+        Payments verified on server. Coupons redeemed on server. {rzReady ? "Checkout ready." : ""}
       </p>
     </div>
   );
