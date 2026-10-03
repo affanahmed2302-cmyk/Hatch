@@ -40,6 +40,9 @@ export default function LoginPage() {
         <input type="password" placeholder="Password" value={password} onChange={e => setPassword(e.target.value)} onKeyDown={e => e.key === "Enter" && login()} />
         <button className="btn" onClick={login} disabled={loading}>{loading ? "…" : "Log in"}</button>
       </div>
+      <p style={{ marginTop: 12, fontSize: 13 }}>
+        <Link href="/forgot-password" className="muted">Forgot password?</Link>
+      </p>
       <p className="muted" style={{ marginTop: 16, fontSize: 13 }}>
         New here? <Link href="/signup">Sign up</Link>
       </p>
