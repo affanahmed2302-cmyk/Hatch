@@ -19,18 +19,6 @@ const SWITCHES: { key: FeatureKey; label: string; blurb: string; hot?: boolean }
   { key: "maintenance_mode", label: "Maintenance mode", blurb: "Global soft lock" },
 ];
 
-const MODULE_LINKS = [
-  { href: "/sparks", label: "Sparks dating app", note: "Discover · Likes · Matches · Me" },
-  { href: "/clubs-hq", label: "Clubs HQ (60+ onboard)", note: "Bulk seed + manage clubs" },
-  { href: "/clubs", label: "Student clubs browse", note: "What students see" },
-  { href: "/circle", label: "Private Circle", note: "Premium only" },
-  { href: "/club-admin", label: "Club Core events", note: "Publish to Home feed" },
-  { href: "/admin/premium", label: "Premium UTR", note: "Payments" },
-  { href: "/lounge", label: "Lounge", note: "Open chat" },
-  { href: "/discover", label: "Career Match", note: "Networking (not dating)" },
-  { href: "/home", label: "Campus Home", note: "Main app" },
-];
-
 export default function PilotPage() {
   const [email, setEmail] = useState("");
   const [adminId, setAdminId] = useState<string | null>(null);
@@ -98,34 +86,31 @@ export default function PilotPage() {
         <p className="muted" style={{ fontSize: 12, marginBottom: 10 }}>Signed in as <strong style={{ color: "#a78bfa" }}>{email}</strong></p>
         {msg && <div className="ok" style={{ marginBottom: 10 }}>{msg}</div>}
 
+        <div className="card" style={{ marginBottom: 12, border: "1px solid rgba(52,211,153,0.4)" }}>
+          <div style={{ fontWeight: 800 }}>Launch controls</div>
+          <div className="row" style={{ gap: 8, marginTop: 10, flexWrap: "wrap" }}>
+            <Link href="/pilot/clubs" className="btn btn-sm">Clubs + Captains</Link>
+            <Link href="/pilot/commerce" className="btn btn-sm">Coupons + payments</Link>
+            <Link href="/sparks" className="btn-ghost btn-sm">Sparks app</Link>
+          </div>
+        </div>
+
         <div className="card" style={{
           marginBottom: 14, border: "2px solid rgba(236,72,153,0.5)",
           background: "linear-gradient(135deg,rgba(236,72,153,0.2),rgba(124,58,237,0.15))",
         }}>
-          <div style={{ fontWeight: 900, fontSize: 18 }}>1 · Sparks dating app</div>
+          <div style={{ fontWeight: 900, fontSize: 18 }}>Sparks dating</div>
           <p className="muted" style={{ fontSize: 12, margin: "6px 0 10px" }}>
-            Separate mini-app (Discover / Likes / Matches / Me). Not mixed into campus Home.
+            Toggle secret student entry. Coupons: /pilot/commerce (100% = free unlock).
           </p>
           <div className="row" style={{ gap: 8, marginBottom: 10, flexWrap: "wrap" }}>
             <span className="badge" style={{ background: flags.feature_sparks ? "#22c55e" : "#64748b", color: "#fff" }}>
-              {flags.feature_sparks ? "SECRET LINK ON" : "SECRET LINK OFF"}
+              {flags.feature_sparks ? "ENTRY ON" : "ENTRY OFF"}
             </span>
             <button className="btn btn-sm" onClick={() => toggle("feature_sparks")}>
-              {flags.feature_sparks ? "Hide from students" : "Show secret entry"}
+              {flags.feature_sparks ? "Hide" : "Show entry"}
             </button>
           </div>
-          <Link href="/sparks" className="btn" style={{ display: "block", textAlign: "center" }}>Open full Sparks app →</Link>
-        </div>
-
-        <div className="card" style={{
-          marginBottom: 14, border: "2px solid rgba(14,165,233,0.45)",
-          background: "linear-gradient(135deg,rgba(14,165,233,0.15),rgba(99,102,241,0.12))",
-        }}>
-          <div style={{ fontWeight: 900, fontSize: 18 }}>2 · Clubs HQ (60+)</div>
-          <p className="muted" style={{ fontSize: 12, margin: "6px 0 10px" }}>
-            Bulk seed ~60 BMSCE-style clubs in one tap. Manage from HQ; students browse /clubs.
-          </p>
-          <Link href="/clubs-hq" className="btn" style={{ display: "block", textAlign: "center" }}>Open Clubs HQ →</Link>
         </div>
 
         <div className="card" style={{ marginBottom: 12 }}>
@@ -174,7 +159,7 @@ export default function PilotPage() {
         </div>
 
         <div className="card" style={{ marginBottom: 12 }}>
-          <div className="h2" style={{ marginBottom: 8 }}>Club core</div>
+          <div className="h2" style={{ marginBottom: 8 }}>Club core requests</div>
           {cores.map((c) => (
             <div key={c.id} style={{ marginBottom: 8 }}>
               <div style={{ fontWeight: 700 }}>{c.club_name}</div>
@@ -188,19 +173,11 @@ export default function PilotPage() {
         </div>
 
         <div className="card" style={{ marginBottom: 24 }}>
-          <div className="h2" style={{ marginBottom: 8 }}>All portals</div>
-          {MODULE_LINKS.map((m) => (
-            <Link key={m.href} href={m.href} style={{
-              display: "flex", textDecoration: "none", color: "inherit",
-              padding: "10px 0", borderTop: "1px solid var(--border)",
-            }}>
-              <div style={{ flex: 1 }}>
-                <div style={{ fontWeight: 700, fontSize: 14 }}>{m.label}</div>
-                <p className="muted" style={{ fontSize: 11 }}>{m.note}</p>
-              </div>
-              <span className="muted">→</span>
-            </Link>
-          ))}
+          <div className="h2" style={{ marginBottom: 8 }}>Plan preview (what buyers unlock)</div>
+          <p style={{ fontSize: 13, marginBottom: 6 }}><b>Sparks ₹150</b> — Discover, likes, matches, campus dating profile</p>
+          <p style={{ fontSize: 13, marginBottom: 6 }}><b>Premium ₹120</b> — Private Circle, boosts</p>
+          <p style={{ fontSize: 13, marginBottom: 6 }}><b>Legends ₹999</b> — exclusive society chat</p>
+          <p className="muted" style={{ fontSize: 11 }}>Coupons can make any of these free (100% off) from Commerce.</p>
         </div>
       </div>
     </div>
