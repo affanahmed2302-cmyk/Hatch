@@ -20,6 +20,14 @@ const PLACE_EMOJI: Record<string, string> = {
   "Main gate": "🚪",
 };
 
+const QUERY_HINTS = [
+  "Need 1 lab partner · DSP",
+  "Sharing notes · CIE 2",
+  "Anyone for filter coffee?",
+  "Looking for hackathon teammate",
+  "Quiet study · library 2nd floor",
+];
+
 export default function HomePage() {
   const [myId, setMyId] = useState<string | null>(null);
   const [name, setName] = useState("");
@@ -27,6 +35,8 @@ export default function HomePage() {
   const [free, setFree] = useState<any[]>([]);
   const [clubEvents, setClubEvents] = useState<any[]>([]);
   const [pulseText, setPulseText] = useState("");
+  const [liveNote, setLiveNote] = useState("");
+  const [livePlace, setLivePlace] = useState("Nescafe");
   const [streak, setStreak] = useState(0);
   const [msg, setMsg] = useState("");
   const [err, setErr] = useState("");
@@ -67,12 +77,17 @@ export default function HomePage() {
     })();
   }, [router]);
 
-  async function goFree(place: string) {
+  async function goLive() {
     if (!myId) return;
-    const res = await setFreeNow(myId, place);
-    if (!res.ok) setErr(res.error || "Failed");
+    const note = liveNote.trim();
+    const res = await setFreeNow(myId, livePlace, note || undefined);
+    if (!res.ok) setErr(res.error || "Failed — run hatch_avatars_and_free_now.sql");
     else {
-      setMsg("You're live at " + place + " · others can ping you");
+      setMsg(
+        note
+          ? `Live at ${livePlace}: “${note}” · others can Ping you`
+          : `Live at ${livePlace} · others can Ping you`
+      );
       haptic([10, 20, 10]);
       playPing();
       await refresh(myId);
@@ -163,28 +178,62 @@ export default function HomePage() {
           </Link>
         )}
 
+        {/* CAMPUS LIVE — place + unique query + ping */}
         <div className="card" style={{
           marginBottom: 12,
           border: "1px solid rgba(52,211,153,0.35)",
           background: "linear-gradient(160deg,rgba(16,185,129,0.12),rgba(6,78,59,0.15))",
         }}>
-          <div className="row" style={{ marginBottom: 10 }}>
+          <div className="row" style={{ marginBottom: 8 }}>
             <div style={{ flex: 1 }}>
-              <div style={{ fontWeight: 800, fontSize: 15 }}>🟢 Free on campus</div>
-              <p className="muted" style={{ fontSize: 11 }}>Tap a place · live 15 min · others can ping</p>
+              <div style={{ fontWeight: 800, fontSize: 15 }}>🟢 Campus Live</div>
+              <p className="muted" style={{ fontSize: 11 }}>
+                Place + your unique ask · live 15 min · others Ping → chat
+              </p>
             </div>
             <span className="badge" style={{ background: "#10b981", color: "#fff" }}>{free.length} live</span>
           </div>
 
-          <div className="row" style={{ gap: 6, flexWrap: "wrap", marginBottom: 12 }}>
+          <p className="muted" style={{ fontSize: 11, marginBottom: 6 }}>Where are you?</p>
+          <div className="row" style={{ gap: 6, flexWrap: "wrap", marginBottom: 10 }}>
             {PLACES.map((p) => (
-              <button key={p} className="chip" onClick={() => goFree(p)} style={{
-                borderColor: "rgba(52,211,153,0.4)",
-              }}>
+              <button
+                key={p}
+                type="button"
+                className={livePlace === p ? "chip on" : "chip"}
+                onClick={() => setLivePlace(p)}
+                style={{ borderColor: "rgba(52,211,153,0.4)" }}
+              >
                 {(PLACE_EMOJI[p] || "📍") + " " + p}
               </button>
             ))}
           </div>
+
+          <p className="muted" style={{ fontSize: 11, marginBottom: 6 }}>Your unique query (optional)</p>
+          <input
+            value={liveNote}
+            onChange={(e) => setLiveNote(e.target.value)}
+            placeholder="e.g. Need lab partner · DSP notes"
+            maxLength={120}
+            style={{ marginBottom: 8 }}
+          />
+          <div className="row" style={{ gap: 6, flexWrap: "wrap", marginBottom: 10 }}>
+            {QUERY_HINTS.map((h) => (
+              <button
+                key={h}
+                type="button"
+                className="btn-ghost btn-sm"
+                style={{ fontSize: 11 }}
+                onClick={() => setLiveNote(h)}
+              >
+                {h}
+              </button>
+            ))}
+          </div>
+
+          <button className="btn" style={{ width: "100%", marginBottom: 12 }} onClick={goLive}>
+            Go live at {livePlace}
+          </button>
 
           {free.map((f: any) => (
             <div
@@ -211,9 +260,13 @@ export default function HomePage() {
                 <div style={{ fontWeight: 800, fontSize: 14 }}>{displayName(f.profile || {})}</div>
                 <p style={{ fontSize: 13, marginTop: 2 }}>
                   {(PLACE_EMOJI[f.place] || "📍") + " "}
-                  <strong style={{ color: "#6ee7b7" }}>at {f.place}</strong>
-                  <span className="muted"> · right now</span>
+                  <strong style={{ color: "#6ee7b7" }}>{f.place}</strong>
                 </p>
+                {f.note && (
+                  <p style={{ fontSize: 13, marginTop: 4, color: "#f5f5f7", lineHeight: 1.35 }}>
+                    “{f.note}”
+                  </p>
+                )}
               </div>
               <Link
                 href={"/chat/" + f.user_id}
@@ -225,7 +278,9 @@ export default function HomePage() {
             </div>
           ))}
           {!free.length && (
-            <p className="muted" style={{ fontSize: 12 }}>Nobody live yet — be first at Nescafe or Library</p>
+            <p className="muted" style={{ fontSize: 12 }}>
+              Nobody live yet — go live with your query so others can Ping you
+            </p>
           )}
         </div>
 
