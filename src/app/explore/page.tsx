@@ -36,7 +36,7 @@ export default function ExplorePage() {
       </div>
       <div className="page">
         <p className="muted" style={{ fontSize: 13, marginBottom: 14 }}>
-          Balanced campus network · career · social · sparks
+          Everything live for every student — no hidden doors
         </p>
 
         <MidnightBlackout userId={uid} />
@@ -44,43 +44,23 @@ export default function ExplorePage() {
           <p className="muted" style={{ fontSize: 11, marginBottom: 12 }}>{blackoutCountdown()}</p>
         )}
 
-        <div style={{ fontWeight: 700, fontSize: 12, marginBottom: 8, opacity: 0.7 }}>CAMPUS CORE</div>
+        <div style={{ fontWeight: 700, fontSize: 12, marginBottom: 8, opacity: 0.7 }}>LIVE FOR YOU</div>
         {[
+          { href: "/challenges", title: "Campus Challenges", blurb: "Daily missions · earn points" },
+          { href: "/sparks", title: "Campus Sparks", blurb: "Dating · free at launch" },
           { href: "/teams", title: "Teams", blurb: "Project teammates · hackathons" },
-          { href: "/clubs", title: "Clubs", blurb: "Club cores & events" },
+          { href: "/clubs", title: "Clubs", blurb: "Club boards & events" },
           { href: "/lounge", title: "Lounge", blurb: "Open campus chat" },
-          { href: "/leaderboard", title: "Leaderboard", blurb: "Rep ranks" },
-        ].map((t) => (
-          <Link key={t.href} href={t.href} className="card" style={{
-            display: "block", marginBottom: 8, textDecoration: "none", color: "inherit",
-          }}>
-            <div style={{ fontWeight: 700 }}>{t.title}</div>
-            <p className="muted" style={{ fontSize: 12 }}>{t.blurb}</p>
-          </Link>
-        ))}
-
-        <div style={{ fontWeight: 700, fontSize: 12, margin: "14px 0 8px", opacity: 0.7 }}>SECONDARY</div>
-        <Link href="/sparks" className="card" style={{
-          display: "block", marginBottom: 8, textDecoration: "none", color: "inherit",
-          border: "1px solid rgba(244,114,182,0.35)",
-        }}>
-          <div style={{ fontWeight: 800 }}>Campus Sparks</div>
-          <p className="muted" style={{ fontSize: 12 }}>Dating · free during launch · not on home</p>
-        </Link>
-        <Link href="/legends" className="card" style={{
-          display: "block", marginBottom: 8, textDecoration: "none", color: "inherit",
-        }}>
-          <div style={{ fontWeight: 700 }}>Legends of BMSCE</div>
-          <p className="muted" style={{ fontSize: 12 }}>Optional society chat</p>
-        </Link>
-
-        {[
           { href: "/radar", title: "Quantum Radar", blurb: "Nearby intents" },
-          { href: "/ghost", title: "Ghost Teammate", blurb: "AI squad" },
-          { href: "/install", title: "Install app", blurb: "Home screen" },
+          { href: "/ghost", title: "Ghost Teammate", blurb: "AI squad matcher" },
+          { href: "/leaderboard", title: "Leaderboard", blurb: "Rep ranks" },
+          { href: "/premium", title: "Premium", blurb: "Circle & extras" },
+          { href: "/legends", title: "Legends of BMSCE", blurb: "Optional society chat" },
+          { href: "/install", title: "Install app", blurb: "Home screen + alerts" },
         ].map((t) => (
           <Link key={t.href} href={t.href} className="card" style={{
             display: "block", marginBottom: 8, textDecoration: "none", color: "inherit",
+            border: t.href === "/sparks" ? "1px solid rgba(244,114,182,0.4)" : undefined,
           }}>
             <div style={{ fontWeight: 700 }}>{t.title}</div>
             <p className="muted" style={{ fontSize: 12 }}>{t.blurb}</p>

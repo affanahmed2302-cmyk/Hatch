@@ -6,6 +6,6 @@ export const GROWTH = {
   legendsFree: false,
   /** Premium circle still paid */
   premiumFree: false,
-  /** Show Sparks on Explore as secondary, never home hero */
-  sparksSecondaryOnly: true,
+  /** Show Sparks on Explore + Home — not buried */
+  sparksSecondaryOnly: false,
 } as const
