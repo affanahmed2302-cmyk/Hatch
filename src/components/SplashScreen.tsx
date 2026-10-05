@@ -2,14 +2,9 @@
 import { useEffect, useState } from "react";
 import { playWordReveal, playOut } from "@/lib/splashSounds";
 
-/** v4 — no first logo frame (kills old circle mark forever) */
-const SESSION_KEY = "hatch_splash_v4";
+const SESSION_KEY = "hatch_splash_v5";
 
-/**
- * Netflix-style intro ONLY:
- * H slides in → atch follows → HATCH → fade to app
- * No icon / no circle / no first mark
- */
+/** Fast HATCH intro — short, GPU-friendly, no laggy logo stage */
 export default function SplashScreen() {
   const [show, setShow] = useState(false);
   const [phase, setPhase] = useState<"word" | "out">("word");
@@ -21,25 +16,40 @@ export default function SplashScreen() {
     } catch {
       /* */
     }
-    setShow(true);
-    playWordReveal();
 
-    const t2 = setTimeout(() => {
+    // Defer paint + sound so first frame stays smooth
+    const start = requestAnimationFrame(() => {
+      setShow(true);
+      // Sound after gesture-safe tick (still may mute until user taps once on iOS)
+      try {
+        playWordReveal();
+      } catch {
+        /* */
+      }
+    });
+
+    const tOut = window.setTimeout(() => {
       setPhase("out");
-      playOut();
-    }, 1800);
-    const t3 = setTimeout(() => {
+      try {
+        playOut();
+      } catch {
+        /* */
+      }
+    }, 1100);
+
+    const tHide = window.setTimeout(() => {
       try {
         sessionStorage.setItem(SESSION_KEY, "1");
       } catch {
         /* */
       }
       setShow(false);
-    }, 2400);
+    }, 1450);
 
     return () => {
-      clearTimeout(t2);
-      clearTimeout(t3);
+      cancelAnimationFrame(start);
+      clearTimeout(tOut);
+      clearTimeout(tHide);
     };
   }, []);
 
@@ -49,9 +59,10 @@ export default function SplashScreen() {
     <div
       className={`hatch-splash ${phase === "out" ? "hatch-splash-out" : ""}`}
       aria-hidden
+      style={{ willChange: "opacity" }}
     >
       <div className="hatch-splash-stage hatch-splash-stage-word is-active">
-        <div className="hatch-splash-wordline">
+        <div className="hatch-splash-wordline" style={{ willChange: "transform, opacity" }}>
           <span className="hatch-splash-h">H</span>
           <span className="hatch-splash-atch">atch</span>
         </div>

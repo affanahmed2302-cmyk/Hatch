@@ -1,4 +1,4 @@
-/** Lightweight Web Audio SFX for splash — no external files */
+/** Splash music — short upbeat hook (Web Audio, no files) */
 
 let ctx: AudioContext | null = null;
 
@@ -10,7 +10,7 @@ function getCtx(): AudioContext | null {
       if (!AC) return null;
       ctx = new AC();
     }
-    if (ctx.state === "suspended") ctx.resume().catch(() => {});
+    if (ctx.state === "suspended") void ctx.resume();
     return ctx;
   } catch {
     return null;
@@ -26,41 +26,46 @@ function tone(
 ) {
   const c = getCtx();
   if (!c) return;
+  const t0 = c.currentTime + start;
   const osc = c.createOscillator();
   const g = c.createGain();
+  const filter = c.createBiquadFilter();
+  filter.type = "lowpass";
+  filter.frequency.value = 3200;
   osc.type = type;
-  osc.frequency.setValueAtTime(frequency, c.currentTime + start);
-  g.gain.setValueAtTime(0.0001, c.currentTime + start);
-  g.gain.exponentialRampToValueAtTime(gainPeak, c.currentTime + start + 0.03);
-  g.gain.exponentialRampToValueAtTime(0.0001, c.currentTime + start + duration);
-  osc.connect(g);
+  osc.frequency.setValueAtTime(frequency, t0);
+  g.gain.setValueAtTime(0.0001, t0);
+  g.gain.exponentialRampToValueAtTime(Math.max(0.001, gainPeak), t0 + 0.02);
+  g.gain.exponentialRampToValueAtTime(0.0001, t0 + duration);
+  osc.connect(filter);
+  filter.connect(g);
   g.connect(c.destination);
-  osc.start(c.currentTime + start);
-  osc.stop(c.currentTime + start + duration + 0.05);
+  osc.start(t0);
+  osc.stop(t0 + duration + 0.02);
 }
 
-/** Logo appears — soft whoosh + warm hit */
-export function playLogoIn() {
-  const c = getCtx();
-  if (!c) return;
-  // whoosh noise-ish via detuned saw
-  tone(180, 0, 0.35, "sawtooth", 0.06);
-  tone(220, 0.05, 0.28, "triangle", 0.08);
-  tone(440, 0.12, 0.2, "sine", 0.1);
-}
-
-/** HATCH letters — Netflix-ish rising notes */
+/** Bright ascending hook — feels like app open, not a boring beep */
 export function playWordReveal() {
   const c = getCtx();
   if (!c) return;
-  tone(392, 0, 0.18, "sine", 0.12); // G4
-  tone(494, 0.12, 0.18, "sine", 0.11); // B4
-  tone(587, 0.24, 0.22, "triangle", 0.13); // D5
-  tone(784, 0.4, 0.35, "sine", 0.1); // G5 resolve
+  // Chord stab
+  tone(261.63, 0, 0.22, "triangle", 0.07); // C4
+  tone(329.63, 0, 0.22, "sine", 0.06); // E4
+  tone(392.0, 0, 0.22, "sine", 0.05); // G4
+  // Rising melody
+  tone(523.25, 0.12, 0.14, "sine", 0.11); // C5
+  tone(659.25, 0.24, 0.14, "triangle", 0.1); // E5
+  tone(783.99, 0.36, 0.16, "sine", 0.12); // G5
+  tone(1046.5, 0.5, 0.28, "triangle", 0.09); // C6 sparkle
+  // Soft bass under
+  tone(130.81, 0, 0.45, "sine", 0.04);
 }
 
-/** Exit soft click */
+export function playLogoIn() {
+  playWordReveal();
+}
+
 export function playOut() {
-  tone(520, 0, 0.12, "sine", 0.05);
-  tone(260, 0.04, 0.15, "triangle", 0.04);
+  tone(880, 0, 0.08, "sine", 0.04);
+  tone(1320, 0.05, 0.1, "triangle", 0.03);
 }
