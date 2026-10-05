@@ -12,10 +12,16 @@
   "categories": ["social", "education", "productivity"],
   "icons": [
     {
-      "src": "/icon.svg",
+      "src": "/icon.svg?v=energy-h-c3",
       "sizes": "any",
       "type": "image/svg+xml",
-      "purpose": "any maskable"
+      "purpose": "any"
+    },
+    {
+      "src": "/icon.svg?v=energy-h-c3",
+      "sizes": "512x512",
+      "type": "image/svg+xml",
+      "purpose": "maskable"
     }
   ]
 }
