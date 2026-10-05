@@ -12,26 +12,34 @@ export async function saveSparksProfile(
     consent?: boolean
   }
 ) {
+  // Do NOT write gender into sparks_profiles — column may not exist.
+  // Gender is stored on profiles only.
   const payload: any = {
     user_id: userId,
     headline: (fields.headline || '').trim() || null,
     vibe: (fields.vibe || '').trim() || null,
     looking_for: (fields.looking_for || '').trim() || null,
     prompts: (fields.prompts || '').trim() || null,
-    gender: (fields.gender || '').trim() || null,
     meet_pref: (fields.meet_pref || '').trim() || null,
     is_visible: true,
     updated_at: new Date().toISOString(),
   }
   if (fields.consent) payload.consent_at = new Date().toISOString()
-  const { error } = await supabase.from('sparks_profiles').upsert(payload)
+
+  const { error } = await supabase.from('sparks_profiles').upsert(payload, {
+    onConflict: 'user_id',
+  })
   if (error) return { ok: false as const, error: error.message }
 
-  // mirror gender on main profile for confessions cues
   if (fields.gender) {
     try {
-      await supabase.from('profiles').update({ gender: fields.gender }).eq('id', userId)
-    } catch { /* optional */ }
+      await supabase
+        .from('profiles')
+        .update({ gender: (fields.gender || '').trim() })
+        .eq('id', userId)
+    } catch {
+      /* optional */
+    }
   }
   return { ok: true as const, error: null }
 }
@@ -47,7 +55,7 @@ export async function fetchSparksDeck(myId: string, limit = 30) {
 
     const { data: rows } = await supabase
       .from('sparks_profiles')
-      .select('user_id, headline, vibe, looking_for, prompts, gender, meet_pref')
+      .select('user_id, headline, vibe, looking_for, prompts, meet_pref')
       .eq('is_visible', true)
       .limit(80)
 
@@ -61,7 +69,7 @@ export async function fetchSparksDeck(myId: string, limit = 30) {
       .in('id', ids)
     const map = Object.fromEntries((profs || []).map((p: any) => [p.id, p]))
     return candidates
-      .map((c) => ({ ...c, profile: map[c.user_id] }))
+      .map((c) => ({ ...c, profile: map[c.user_id], gender: map[c.user_id]?.gender }))
       .filter((c) => c.profile)
   } catch {
     return []
@@ -78,80 +86,64 @@ export async function sparkSwipe(fromId: string, toId: string, liked: boolean) {
 
     let matched = false
     if (liked) {
-      const { data: back } = await supabase
+      const { data: other } = await supabase
         .from('sparks_likes')
         .select('id')
         .eq('from_id', toId)
         .eq('to_id', fromId)
         .eq('liked', true)
         .maybeSingle()
-      matched = !!back
+      if (other) {
+        matched = true
+        const [a, b] = fromId < toId ? [fromId, toId] : [toId, fromId]
+        await supabase.from('sparks_matches').upsert(
+          { user_a: a, user_b: b },
+          { onConflict: 'user_a,user_b' }
+        )
+      }
     }
     return { ok: true as const, error: null, matched }
   } catch (e: any) {
-    return { ok: false as const, error: e?.message || 'Failed', matched: false }
+    return { ok: false as const, error: e?.message || 'Swipe failed', matched: false }
   }
 }
 
-export async function fetchMatches(myId: string) {
+export async function fetchSparksMatches(myId: string) {
   try {
-    const { data: iLiked } = await supabase
-      .from('sparks_likes')
-      .select('to_id')
-      .eq('from_id', myId)
-      .eq('liked', true)
-    const ids = (iLiked || []).map((r) => r.to_id)
-    if (!ids.length) return []
-
-    const { data: theyLiked } = await supabase
-      .from('sparks_likes')
-      .select('from_id')
-      .eq('to_id', myId)
-      .eq('liked', true)
-      .in('from_id', ids)
-
-    const matchIds = (theyLiked || []).map((r) => r.from_id)
-    if (!matchIds.length) return []
-
+    const { data } = await supabase
+      .from('sparks_matches')
+      .select('user_a, user_b, created_at')
+      .or(`user_a.eq.${myId},user_b.eq.${myId}`)
+      .order('created_at', { ascending: false })
+      .limit(50)
+    if (!data?.length) return []
+    const peerIds = data.map((m) => (m.user_a === myId ? m.user_b : m.user_a))
     const { data: profs } = await supabase
       .from('profiles')
       .select('id, full_name, username, avatar_url, department, year, gender')
-      .in('id', matchIds)
-    const { data: sparks } = await supabase
-      .from('sparks_profiles')
-      .select('user_id, headline, vibe')
-      .in('user_id', matchIds)
-    const sMap = Object.fromEntries((sparks || []).map((s: any) => [s.user_id, s]))
-    return (profs || []).map((p: any) => ({ profile: p, spark: sMap[p.id] }))
+      .in('id', peerIds)
+    const map = Object.fromEntries((profs || []).map((p: any) => [p.id, p]))
+    return peerIds.map((id) => map[id]).filter(Boolean)
   } catch {
     return []
   }
 }
 
-export async function fetchLikesYou(myId: string) {
+export async function fetchSparksLikes(myId: string) {
   try {
-    const { data: rows } = await supabase
+    const { data } = await supabase
       .from('sparks_likes')
-      .select('from_id')
+      .select('from_id, created_at')
       .eq('to_id', myId)
       .eq('liked', true)
-    const ids = (rows || []).map((r) => r.from_id)
-    if (!ids.length) return []
-
-    const { data: iActed } = await supabase
-      .from('sparks_likes')
-      .select('to_id, liked')
-      .eq('from_id', myId)
-      .in('to_id', ids)
-    const actedMap = Object.fromEntries((iActed || []).map((r: any) => [r.to_id, r.liked]))
-
-    const pending = ids.filter((id) => actedMap[id] === undefined)
-    if (!pending.length) return []
-
+      .order('created_at', { ascending: false })
+      .limit(40)
+    if (!data?.length) return []
+    const ids = data.map((d) => d.from_id)
     const { data: profs } = await supabase
       .from('profiles')
       .select('id, full_name, username, avatar_url, department, gender')
-      .in('id', pending)
+      .in('id', ids)
     return profs || []
   } catch {
     return []
