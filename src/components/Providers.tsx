@@ -4,6 +4,7 @@ import InstallBanner from "./InstallBanner";
 import LiveAlerts from "./LiveAlerts";
 import NotifyPrompt from "./NotifyPrompt";
 import PilotButton from "./PilotButton";
+import SplashScreen from "./SplashScreen";
 import { supabase } from "@/lib/supabase";
 import { registerPushSubscription } from "@/lib/pushClient";
 
@@ -15,13 +16,13 @@ export default function Providers({ children }: { children: React.ReactNode }) {
     (async () => {
       const { data: { user } } = await supabase.auth.getUser();
       if (user) {
-        // slight delay so SW is ready
         setTimeout(() => registerPushSubscription(user.id), 1500);
       }
     })();
   }, []);
   return (
     <>
+      <SplashScreen />
       {children}
       <LiveAlerts />
       <NotifyPrompt />
