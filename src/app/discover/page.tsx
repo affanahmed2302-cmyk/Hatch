@@ -8,7 +8,6 @@ import { getBlockedIds } from "@/lib/safety";
 import Nav from "@/components/Nav";
 
 const DEPTS = ["All", "CSE", "ISE", "ECE", "EEE", "ME", "CV", "AIML", "AIDS", "Other"];
-const INTENTS_F = ["All", "Internship", "Hackathons", "Study buddy", "Project partner", "Open source", "Research", "Placement", "Startup"];
 const YEARS_F = ["All", "1", "2", "3", "4"];
 
 type Card = {
@@ -27,7 +26,6 @@ export default function DiscoverPage() {
   const [loading, setLoading] = useState(true);
   const [q, setQ] = useState("");
   const [dept, setDept] = useState("All");
-  const [intentF, setIntentF] = useState("All");
   const [yearF, setYearF] = useState("All");
   const router = useRouter();
 
@@ -78,27 +76,20 @@ export default function DiscoverPage() {
     }
     setPeople(cards);
     setMatches(filtered.filter(p => connectedIds.has(p.id)).map(p => ({ ...p, skills: Array.isArray(p.skills) ? p.skills : [] })));
-
-    if (pendingIn.length) {
-      const { data: rp } = await supabase.from("profiles")
-        .select("id, full_name, username, bio, department, year, avatar_url, is_verified, skills")
-        .in("id", pendingIn);
-      setRequests((rp || []).map(p => ({ ...p, skills: Array.isArray(p.skills) ? p.skills : [] })));
-    } else setRequests([]);
+    setRequests(filtered.filter(p => pendingIn.includes(p.id)).map(p => ({ ...p, skills: Array.isArray(p.skills) ? p.skills : [] })));
   }
 
   const visible = useMemo(() => {
-    const qq = q.trim().toLowerCase();
-    return people.filter(p => {
+    return people.filter((p) => {
+      if (q) {
+        const hay = `${p.full_name || ""} ${p.username || ""} ${(p.skills || []).join(" ")} ${p.bio || ""}`.toLowerCase();
+        if (!hay.includes(q.toLowerCase())) return false;
+      }
       if (dept !== "All" && (p.department || "") !== dept) return false;
-      if (intentF !== "All" && (p.intent || "") !== intentF) return false;
       if (yearF !== "All" && String(p.year || "") !== yearF) return false;
-      if (!qq) return true;
-      const hay = [p.full_name, p.username, p.bio, p.department, p.intent, p.career_goal, ...(p.skills || [])]
-        .filter(Boolean).join(" ").toLowerCase();
-      return hay.includes(qq);
+      return true;
     });
-  }, [people, q, dept, intentF, yearF]);
+  }, [people, q, dept, yearF]);
 
   async function connect(peerId: string) {
     if (!myId) return;
@@ -142,80 +133,124 @@ export default function DiscoverPage() {
     setPeople(prev => prev.map(p => p.id === peerId ? { ...p, saved: on } : p));
   }
 
-  if (loading) return <div className="shell" style={{ display: "flex", alignItems: "center", justifyContent: "center" }}><span className="muted">Loading...</span></div>;
+  if (loading) {
+    return (
+      <div className="shell" style={{ display: "flex", alignItems: "center", justifyContent: "center" }}>
+        <span className="muted">Loading…</span>
+      </div>
+    );
+  }
 
   return (
     <div className="shell">
-      <div className="topbar"><div className="logo">HATCH</div></div>
+      <div className="topbar">
+        <div className="logo">HATCH</div>
+      </div>
       <div className="page">
-        <h1 className="h1" style={{ marginBottom: 12 }}>Connect</h1>
+        <div className="hero-card" style={{ marginBottom: 14 }}>
+          <h1 className="h1" style={{ fontSize: 24, marginBottom: 6, position: "relative", zIndex: 1 }}>
+            Find people
+          </h1>
+          <p className="muted" style={{ fontSize: 13, position: "relative", zIndex: 1 }}>
+            Skills · teams · real campus connections
+          </p>
+          <div className="pill-row" style={{ position: "relative", zIndex: 1 }}>
+            <span className="pill hot">{visible.length} discover</span>
+            <span className="pill">{matches.length} connected</span>
+            {requests.length > 0 && <span className="pill">{requests.length} requests</span>}
+          </div>
+        </div>
+
+        {msg && <div className="ok" style={{ marginBottom: 10 }}>{msg}</div>}
+
         <div className="row" style={{ gap: 8, marginBottom: 12, flexWrap: "wrap" }}>
-          <button className={tab === "discover" ? "btn btn-sm" : "btn-ghost btn-sm"} onClick={() => setTab("discover")}>Discover ({visible.length})</button>
-          <button className={tab === "requests" ? "btn btn-sm" : "btn-ghost btn-sm"} onClick={() => setTab("requests")}>Requests ({requests.length})</button>
-          <button className={tab === "matches" ? "btn btn-sm" : "btn-ghost btn-sm"} onClick={() => setTab("matches")}>Connected ({matches.length})</button>
+          {([["discover", "Discover"], ["matches", "Connected"], ["requests", "Requests"]] as const).map(([k, label]) => (
+            <button key={k} type="button" className={tab === k ? "chip on" : "chip"} onClick={() => setTab(k)}>
+              {label}{k === "requests" && requests.length > 0 ? ` (${requests.length})` : ""}
+            </button>
+          ))}
         </div>
 
         {tab === "discover" && (
           <>
-            <input
-              value={q}
-              onChange={e => setQ(e.target.value)}
-              placeholder="Search name, skill, branch…"
-              style={{ marginBottom: 10, borderRadius: 14 }}
-            />
-            <div className="row" style={{ gap: 6, flexWrap: "wrap", marginBottom: 8 }}>
-              {DEPTS.map(d => (
-                <button key={d} className={dept === d ? "btn btn-sm" : "btn-ghost btn-sm"} onClick={() => setDept(d)}>{d}</button>
-              ))}
-            </div>
-            <div className="row" style={{ gap: 6, flexWrap: "wrap", marginBottom: 8 }}>
-              {INTENTS_F.map(i => (
-                <button key={i} className={intentF === i ? "btn btn-sm" : "btn-ghost btn-sm"} onClick={() => setIntentF(i)} style={{ fontSize: 11 }}>{i === "All" ? "Any intent" : i}</button>
-              ))}
-            </div>
+            <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search name, skill, bio…" style={{ marginBottom: 10 }} />
             <div className="row" style={{ gap: 6, flexWrap: "wrap", marginBottom: 12 }}>
-              {YEARS_F.map(y => (
-                <button key={y} className={yearF === y ? "btn btn-sm" : "btn-ghost btn-sm"} onClick={() => setYearF(y)} style={{ fontSize: 11 }}>{y === "All" ? "Any year" : y + (y === "1" ? "st" : y === "2" ? "nd" : y === "3" ? "rd" : "th")}</button>
+              {DEPTS.slice(0, 8).map((d) => (
+                <button key={d} type="button" className={dept === d ? "chip on" : "chip"} style={{ fontSize: 11 }} onClick={() => setDept(d)}>{d}</button>
               ))}
             </div>
+            <div className="row" style={{ gap: 6, flexWrap: "wrap", marginBottom: 14 }}>
+              {YEARS_F.map((y) => (
+                <button key={y} type="button" className={yearF === y ? "chip on" : "chip"} style={{ fontSize: 11 }} onClick={() => setYearF(y)}>
+                  {y === "All" ? "Year" : `Y${y}`}
+                </button>
+              ))}
+            </div>
+
+            {visible.map((p, i) => (
+              <div key={p.id} className="card" style={{
+                marginBottom: 12,
+                border: "1px solid rgba(167,139,250,0.25)",
+                background: i % 2 === 0
+                  ? "linear-gradient(160deg, rgba(139,92,246,0.14), rgba(22,22,32,0.8))"
+                  : "linear-gradient(160deg, rgba(236,72,153,0.1), rgba(22,22,32,0.8))",
+              }}>
+                <Link href={"/u/" + p.id} style={{ display: "flex", gap: 12, alignItems: "center", textDecoration: "none", color: "inherit" }}>
+                  <div style={{
+                    width: 56, height: 56, borderRadius: "50%", flexShrink: 0,
+                    border: "2px solid rgba(167,139,250,0.35)",
+                    background: p.avatar_url ? `url(${p.avatar_url}) center/cover` : "var(--grad-cool)",
+                  }} />
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div className="row" style={{ gap: 6, flexWrap: "wrap" }}>
+                      <span style={{ fontWeight: 800, fontSize: 15 }}>{displayName(p)}</span>
+                      {p.is_verified && <span className="badge">✓</span>}
+                    </div>
+                    <p className="muted" style={{ fontSize: 12, marginTop: 2 }}>
+                      {[p.department, p.year ? yearToLabel(p.year) : null].filter(Boolean).join(" · ") || "BMSCE"}
+                    </p>
+                    {p.intent && <span className="pill" style={{ marginTop: 6, display: "inline-block" }}>{p.intent}</span>}
+                  </div>
+                </Link>
+                {p.bio && (
+                  <p style={{ fontSize: 13, marginTop: 10, lineHeight: 1.4, opacity: 0.9 }}>
+                    {p.bio.slice(0, 120)}{p.bio.length > 120 ? "…" : ""}
+                  </p>
+                )}
+                {(p.skills || []).length > 0 && (
+                  <div className="row" style={{ gap: 6, flexWrap: "wrap", marginTop: 10 }}>
+                    {(p.skills || []).slice(0, 5).map((s) => (
+                      <span key={s} className="chip" style={{ fontSize: 11 }}>{s}</span>
+                    ))}
+                  </div>
+                )}
+                <div className="row" style={{ gap: 8, marginTop: 12, flexWrap: "wrap" }}>
+                  <button className="btn btn-sm" onClick={() => connect(p.id)}>Connect</button>
+                  <button className="btn-ghost btn-sm" onClick={() => save(p.id)}>{p.saved ? "Saved" : "Save"}</button>
+                  <Link href={"/u/" + p.id} className="btn-ghost btn-sm">Profile</Link>
+                  <Link href={"/chat/" + p.id} className="btn-ghost btn-sm">Message</Link>
+                </div>
+              </div>
+            ))}
+            {!visible.length && (
+              <div className="empty">
+                <p style={{ fontWeight: 700 }}>No one matches this filter</p>
+                <p className="muted" style={{ fontSize: 13, marginTop: 6 }}>Try All departments or clear search</p>
+              </div>
+            )}
           </>
         )}
 
-        {msg && <div className="ok" style={{ marginBottom: 10 }}>{msg}</div>}
-
-        {tab === "discover" && visible.map(p => (
-          <div key={p.id} className="card" style={{ marginBottom: 10 }}>
-            <Link href={"/u/" + p.id} style={{ textDecoration: "none", color: "inherit" }}>
-              <div className="row" style={{ gap: 12, alignItems: "center" }}>
-                <div style={{
-                  width: 52, height: 52, borderRadius: "50%",
-                  background: p.avatar_url ? `url(${p.avatar_url}) center/cover` : "var(--grad-cool)",
-                }} />
-                <div style={{ flex: 1 }}>
-                  <div className="h2" style={{ fontSize: 16 }}>{displayName(p)}{p.is_verified ? " ✓" : ""}</div>
-                  <p className="muted" style={{ fontSize: 12 }}>
-                    {p.department}{p.year ? ` · ${yearToLabel(p.year)}` : ""}{p.mutual ? ` · ${p.mutual} mutual` : ""}
-                  </p>
-                </div>
-              </div>
-              {p.bio && <p style={{ fontSize: 13, marginTop: 8 }}>{p.bio.slice(0, 120)}</p>}
-              {p.intent && <p className="muted" style={{ fontSize: 12, marginTop: 4 }}>Looking for · {p.intent}</p>}
-            </Link>
-            <div className="row" style={{ gap: 8, marginTop: 10, flexWrap: "wrap" }}>
-              <button className="btn btn-sm" onClick={() => connect(p.id)}>Connect</button>
-              <button className="btn-ghost btn-sm" onClick={() => save(p.id)}>{p.saved ? "Saved" : "Save"}</button>
-              <Link href={"/u/" + p.id} className="btn-ghost btn-sm">Profile</Link>
-              <Link href={"/chat/" + p.id} className="btn-ghost btn-sm">Message</Link>
-            </div>
-          </div>
-        ))}
-
-        {tab === "requests" && requests.map(p => (
-          <div key={p.id} className="card" style={{ marginBottom: 10 }}>
+        {tab === "requests" && requests.map((p) => (
+          <div key={p.id} className="card" style={{
+            marginBottom: 10,
+            border: "1px solid rgba(251,191,36,0.3)",
+            background: "linear-gradient(160deg, rgba(251,191,36,0.1), rgba(22,22,32,0.85))",
+          }}>
             <Link href={"/u/" + p.id} className="row" style={{ gap: 12, alignItems: "center", textDecoration: "none", color: "inherit" }}>
               <div style={{ width: 48, height: 48, borderRadius: "50%", background: p.avatar_url ? `url(${p.avatar_url}) center/cover` : "var(--grad-cool)" }} />
               <div style={{ flex: 1 }}>
-                <div className="h2" style={{ fontSize: 15 }}>{displayName(p)}</div>
+                <div style={{ fontWeight: 800, fontSize: 15 }}>{displayName(p)}</div>
                 <p className="muted" style={{ fontSize: 12 }}>Wants to connect</p>
               </div>
             </Link>
@@ -226,19 +261,22 @@ export default function DiscoverPage() {
           </div>
         ))}
 
-        {tab === "matches" && matches.map(p => (
-          <div key={p.id} className="card row" style={{ marginBottom: 10, gap: 12, alignItems: "center" }}>
+        {tab === "matches" && matches.map((p) => (
+          <div key={p.id} className="card row" style={{
+            marginBottom: 10, gap: 12, alignItems: "center",
+            border: "1px solid rgba(52,211,153,0.3)",
+            background: "linear-gradient(160deg, rgba(16,185,129,0.12), rgba(22,22,32,0.85))",
+          }}>
             <Link href={"/u/" + p.id} style={{ display: "flex", gap: 12, alignItems: "center", flex: 1, textDecoration: "none", color: "inherit" }}>
               <div style={{ width: 48, height: 48, borderRadius: "50%", background: p.avatar_url ? `url(${p.avatar_url}) center/cover` : "var(--grad-cool)" }} />
-              <div className="h2" style={{ fontSize: 15 }}>{displayName(p)}</div>
+              <div style={{ fontWeight: 800, fontSize: 15 }}>{displayName(p)}</div>
             </Link>
             <Link href={"/chat/" + p.id} className="btn btn-sm">Message</Link>
           </div>
         ))}
 
-        {tab === "discover" && !visible.length && <div className="empty"><p>No matches for this filter</p></div>}
-        {tab === "requests" && !requests.length && <div className="empty"><p>No requests</p></div>}
-        {tab === "matches" && !matches.length && <div className="empty"><p>No connections yet</p></div>}
+        {tab === "requests" && !requests.length && <div className="empty"><p>No requests yet</p></div>}
+        {tab === "matches" && !matches.length && <div className="empty"><p>No connections yet — Discover someone</p></div>}
       </div>
       <Nav />
     </div>
