@@ -135,13 +135,80 @@ export async function saveProfile(userId: string, fields: Record<string, unknown
   }
 }
 
-export function jitsiMeetUrl(room: string, displayName: string) {
+export async function ensureProfile(userId: string, email?: string | null) {
+  try {
+    const { data } = await supabase.from('profiles').select('id').eq('id', userId).maybeSingle()
+    if (!data) {
+      const pod = email ? collegePodFromEmail(email) : 'bmsce'
+      const domain = email ? extractDomain(email) : null
+      await supabase.from('profiles').upsert({
+        id: userId, email: email || null, college: pod.toUpperCase(), college_pod: pod,
+        college_domain: domain, role: 'student',
+        skills: [], connection_count: 0, terms_accepted: false, rep_score: 0,
+      }, { onConflict: 'id' })
+    }
+  } catch { /* ignore */ }
+}
+
+export async function needsTermsAcceptance(userId: string): Promise<boolean> {
+  try {
+    const { data } = await supabase.from('profiles').select('terms_accepted').eq('id', userId).maybeSingle()
+    return !data?.terms_accepted
+  } catch { return false }
+}
+
+export async function acceptTerms(userId: string) {
+  try {
+    const { error } = await supabase.from('profiles').update({
+      terms_accepted: true, terms_accepted_at: new Date().toISOString(), updated_at: new Date().toISOString(),
+    }).eq('id', userId)
+    if (error) return { ok: false as const, error: error.message }
+    return { ok: true as const, error: null }
+  } catch (e: any) {
+    return { ok: false as const, error: e?.message || 'Failed' }
+  }
+}
+
+export async function isProfileComplete(userId: string): Promise<{ ok: boolean; missing: string[] }> {
+  try {
+    const { data } = await supabase.from('profiles').select('full_name, bio, avatar_url, username, terms_accepted').eq('id', userId).maybeSingle()
+    const missing: string[] = []
+    if (!data?.terms_accepted) missing.push('terms')
+    if (!data?.full_name || String(data.full_name).trim().length < 2) missing.push('name')
+    if (!data?.username || String(data.username).trim().length < 3) missing.push('username')
+    if (!data?.bio || String(data.bio).trim().length < 20) missing.push('bio')
+    if (!data?.avatar_url) missing.push('photo')
+    return { ok: missing.length === 0, missing }
+  } catch {
+    return { ok: false, missing: ['profile'] }
+  }
+}
+
+export function jitsiRoom(kind: 'dm' | 'team', id: string) {
+  const clean = id.replace(/[^a-zA-Z0-9]/g, '').toLowerCase().slice(0, 24)
+  return `hatch${kind}${clean}`
+}
+
+export function jitsiEmbedUrl(room: string, audioOnly = false, displayName = 'Hatch') {
   const params = [
     'config.prejoinPageEnabled=false',
+    'config.prejoinConfig.enabled=false',
+    'config.disableDeepLinking=true',
+    'config.enableWelcomePage=false',
+    'config.enableClosePage=false',
+    'config.disableInviteFunctions=true',
+    'config.requireDisplayName=false',
+    'config.startWithAudioMuted=false',
+    audioOnly ? 'config.startWithVideoMuted=true' : 'config.startWithVideoMuted=false',
+    'interfaceConfig.MOBILE_APP_PROMO=false',
     'interfaceConfig.SHOW_JITSI_WATERMARK=false',
     `userInfo.displayName=${encodeURIComponent(displayName)}`,
   ].join('&')
   return `https://meet.jit.si/${encodeURIComponent(room)}#${params}`
+}
+
+export function jitsiMeetUrl(room: string, displayName: string) {
+  return jitsiEmbedUrl(room, false, displayName)
 }
 
 export async function postPulse(userId: string, content: string, category = 'general', isAnonymous = true) {
