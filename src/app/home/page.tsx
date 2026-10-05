@@ -31,6 +31,24 @@ const ACTIVITY_HINTS = [
   "Just free to talk",
 ];
 
+const PULSE_CHIPS = [
+  "🔥 Something wild just happened…",
+  "☕ At Nescafe, good energy",
+  "🎵 Song stuck in my head",
+  "🏀 Anyone for a match?",
+  "🌙 Night campus hits different",
+  "😂 Random campus thought",
+];
+
+function timeAgo(iso?: string) {
+  if (!iso) return "";
+  const s = Math.floor((Date.now() - new Date(iso).getTime()) / 1000);
+  if (s < 60) return "just now";
+  if (s < 3600) return Math.floor(s / 60) + "m";
+  if (s < 86400) return Math.floor(s / 3600) + "h";
+  return Math.floor(s / 86400) + "d";
+}
+
 export default function HomePage() {
   const [myId, setMyId] = useState<string | null>(null);
   const [name, setName] = useState("");
@@ -105,7 +123,7 @@ export default function HomePage() {
     if (!res.ok) setErr(res.error || "Failed");
     else {
       setPulseText("");
-      setMsg("Posted");
+      setMsg("Pulse dropped");
       haptic(8);
       await refresh(myId);
     }
@@ -328,24 +346,110 @@ export default function HomePage() {
           </div>
         )}
 
-        <div className="card" style={{ marginBottom: 12 }}>
-          <div style={{ fontWeight: 700, fontSize: 14, marginBottom: 8 }}>Campus pulse</div>
-          <div className="row" style={{ gap: 8, marginBottom: 10 }}>
-            <input
+        <div
+          className="card"
+          style={{
+            marginBottom: 12,
+            border: "1px solid rgba(167,139,250,0.35)",
+            background:
+              "linear-gradient(165deg, rgba(139,92,246,0.2), rgba(236,72,153,0.1) 40%, rgba(22,22,32,0.85))",
+          }}
+        >
+          <div className="row" style={{ marginBottom: 6, justifyContent: "space-between" }}>
+            <div>
+              <div style={{ fontWeight: 800, fontSize: 16 }}>⚡ Campus Pulse</div>
+              <p className="muted" style={{ fontSize: 11, marginTop: 2 }}>
+                Anonymous campus energy · lasts a few hours
+              </p>
+            </div>
+            <span className="badge">{pulseList.length} live</span>
+          </div>
+
+          <div
+            style={{
+              marginBottom: 12,
+              padding: 12,
+              borderRadius: 16,
+              background: "rgba(0,0,0,0.28)",
+              border: "1px solid rgba(255,255,255,0.08)",
+            }}
+          >
+            <textarea
               value={pulseText}
               onChange={(e) => setPulseText(e.target.value)}
-              placeholder="Share something…"
+              placeholder="Drop a vibe for campus…"
               maxLength={200}
-              style={{ flex: 1 }}
+              rows={2}
+              style={{
+                marginBottom: 8,
+                resize: "none",
+                border: "none",
+                background: "transparent",
+                padding: 0,
+              }}
             />
-            <button className="btn btn-sm" onClick={publishPulse}>Post</button>
+            <div className="row" style={{ gap: 6, flexWrap: "wrap", marginBottom: 10 }}>
+              {PULSE_CHIPS.map((c) => (
+                <button
+                  key={c}
+                  type="button"
+                  className={pulseText === c ? "chip on" : "chip"}
+                  style={{ fontSize: 11 }}
+                  onClick={() => setPulseText(c)}
+                >
+                  {c}
+                </button>
+              ))}
+            </div>
+            <div className="row" style={{ justifyContent: "space-between" }}>
+              <span className="muted" style={{ fontSize: 11 }}>{pulseText.length}/200</span>
+              <button className="btn btn-sm" onClick={publishPulse} disabled={!pulseText.trim()}>
+                Drop pulse
+              </button>
+            </div>
           </div>
-          {pulseList.slice(0, 8).map((p: any) => (
-            <div key={p.id} style={{ padding: "8px 0", borderTop: "1px solid var(--border)" }}>
-              <p style={{ fontSize: 14 }}>{p.content}</p>
+
+          {pulseList.slice(0, 10).map((p: any, i: number) => (
+            <div
+              key={p.id}
+              style={{
+                marginBottom: 10,
+                padding: "12px 14px",
+                borderRadius: 16,
+                background: "rgba(0,0,0,0.22)",
+                border: "1px solid rgba(255,255,255,0.06)",
+                borderLeft: `3px solid ${
+                  ["#a855f7", "#ec4899", "#22d3ee", "#fbbf24"][i % 4]
+                }`,
+              }}
+            >
+              <p style={{ fontSize: 14, lineHeight: 1.45, fontWeight: 500 }}>{p.content}</p>
+              <div className="row" style={{ marginTop: 8, gap: 8 }}>
+                <span className="muted" style={{ fontSize: 11 }}>
+                  {p.is_anonymous !== false ? "Anonymous" : "Student"} · {timeAgo(p.created_at)}
+                </span>
+                {typeof p.likes === "number" && p.likes > 0 && (
+                  <span className="badge" style={{ fontSize: 10 }}>♥ {p.likes}</span>
+                )}
+              </div>
             </div>
           ))}
-          {!pulseList.length && <p className="muted" style={{ fontSize: 12 }}>Nothing yet — post first</p>}
+          {!pulseList.length && (
+            <div
+              style={{
+                textAlign: "center",
+                padding: "20px 12px",
+                borderRadius: 14,
+                background: "rgba(0,0,0,0.2)",
+              }}
+            >
+              <div style={{ fontSize: 28, marginBottom: 6 }}>⚡</div>
+              <p style={{ fontWeight: 700, fontSize: 14 }}>No pulses yet</p>
+              <p className="muted" style={{ fontSize: 12, marginTop: 4 }}>
+                Be the first — tap a chip or type your vibe
+              </p>
+            </div>
+          )}
         </div>
 
         <Link href="/explore" className="btn-ghost" style={{ display: "block", textAlign: "center", marginBottom: 8 }}>
