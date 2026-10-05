@@ -12,13 +12,13 @@
   "categories": ["social", "education", "productivity"],
   "icons": [
     {
-      "src": "/icon.svg?v=energy-h-c3",
+      "src": "/icon.svg?v=energy-h-v4",
       "sizes": "any",
       "type": "image/svg+xml",
       "purpose": "any"
     },
     {
-      "src": "/icon.svg?v=energy-h-c3",
+      "src": "/icon.svg?v=energy-h-v4",
       "sizes": "512x512",
       "type": "image/svg+xml",
       "purpose": "maskable"

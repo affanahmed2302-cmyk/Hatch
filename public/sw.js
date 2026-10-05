@@ -1,5 +1,5 @@
-/* Hatch service worker — push + light offline; never pin old logos */
-const CACHE = "hatch-static-v3";
+/* Hatch SW v4 — drop all old logo caches */
+const CACHE = "hatch-static-v4";
 
 self.addEventListener("install", (event) => {
   self.skipWaiting();
@@ -13,20 +13,14 @@ self.addEventListener("install", (event) => {
 self.addEventListener("activate", (event) => {
   event.waitUntil(
     caches.keys().then((keys) =>
-      Promise.all(
-        keys.filter((k) => k !== CACHE).map((k) => caches.delete(k))
-      )
+      Promise.all(keys.filter((k) => k !== CACHE).map((k) => caches.delete(k)))
     ).then(() => self.clients.claim())
   );
 });
 
 self.addEventListener("fetch", (event) => {
   const url = new URL(event.request.url);
-  // Always network-first for icons / manifest so old ring logo dies
-  if (
-    url.pathname.endsWith("icon.svg") ||
-    url.pathname.endsWith("manifest.json")
-  ) {
+  if (url.pathname.endsWith("icon.svg") || url.pathname.endsWith("manifest.json")) {
     event.respondWith(
       fetch(event.request)
         .then((res) => {
@@ -44,14 +38,12 @@ self.addEventListener("push", (event) => {
   let data = { title: "Hatch", body: "New activity", url: "/home" };
   try {
     if (event.data) data = { ...data, ...event.data.json() };
-  } catch {
-    /* */
-  }
+  } catch { /* */ }
   event.waitUntil(
     self.registration.showNotification(data.title || "Hatch", {
       body: data.body || "",
-      icon: "/icon.svg?v=energy-h-c3",
-      badge: "/icon.svg?v=energy-h-c3",
+      icon: "/icon.svg?v=energy-h-v4",
+      badge: "/icon.svg?v=energy-h-v4",
       data: { url: data.url || "/home" },
     })
   );
