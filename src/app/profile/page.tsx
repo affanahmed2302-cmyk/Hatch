@@ -1,9 +1,10 @@
 "use client";
-import { useEffect, useState, useRef } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { supabase, saveProfile, isSuperAdmin } from "@/lib/supabase";
-import { generateGoalPlan, downloadIcs, saveGoal } from "@/lib/coach";
+import { supabase, saveProfile } from "@/lib/supabase";
+import { uploadUserAvatar } from "@/lib/uploadAvatar";
+import PhotoSheet from "@/components/PhotoSheet";
 import Nav from "@/components/Nav";
 
 export default function ProfilePage() {
@@ -23,10 +24,8 @@ export default function ProfilePage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [sheet, setSheet] = useState(false);
+  const [photoOpen, setPhotoOpen] = useState(false);
   const [uploading, setUploading] = useState(false);
-  const galleryRef = useRef<HTMLInputElement>(null);
-  const fileRef = useRef<HTMLInputElement>(null);
-  const cameraRef = useRef<HTMLInputElement>(null);
   const router = useRouter();
 
   useEffect(() => {
@@ -71,23 +70,18 @@ export default function ProfilePage() {
     setSaving(false);
   }
 
-  async function uploadAvatar(file: File) {
-    if (!userId || !file) return;
-    setUploading(true); setErr("");
-    try {
-      const ext = file.name.split(".").pop() || "jpg";
-      const path = `${userId}/avatar.${ext}`;
-      const { error: upErr } = await supabase.storage.from("avatars").upload(path, file, { upsert: true });
-      if (upErr) throw upErr;
-      const { data } = supabase.storage.from("avatars").getPublicUrl(path);
-      const url = data.publicUrl + "?t=" + Date.now();
-      setAvatarUrl(url);
-      await supabase.from("profiles").update({ avatar_url: url }).eq("id", userId);
-      setMsg("Photo updated");
-    } catch (e: any) {
-      setErr(e?.message || "Upload failed");
-    }
+  async function onPhoto(file: File) {
+    if (!userId) return;
+    setUploading(true); setErr(""); setMsg("");
+    const res = await uploadUserAvatar(userId, file);
     setUploading(false);
+    if (!res.ok) {
+      setErr(res.error);
+      return;
+    }
+    setAvatarUrl(res.url);
+    setMsg("Photo updated");
+    setPhotoOpen(false);
   }
 
   if (loading) {
@@ -109,24 +103,41 @@ export default function ProfilePage() {
         {err && <div className="fail">{err}</div>}
 
         <div className="card stack" style={{ alignItems: "center", textAlign: "center" }}>
-          <div
+          <button
+            type="button"
+            onClick={() => setPhotoOpen(true)}
+            aria-label="Change profile photo"
             style={{
-              width: 96, height: 96, borderRadius: "50%",
+              width: 104,
+              height: 104,
+              borderRadius: "50%",
+              border: "2px solid rgba(139,92,246,0.45)",
               background: avatarUrl ? `url(${avatarUrl}) center/cover` : "var(--grad-cool)",
-              border: "2px solid rgba(139,92,246,0.4)",
+              position: "relative",
+              padding: 0,
+              cursor: "pointer",
             }}
-          />
-          <button className="btn-ghost btn-sm" disabled={uploading} onClick={() => galleryRef.current?.click()}>
-            {uploading ? "Uploading…" : "Change photo"}
+          >
+            <span
+              style={{
+                position: "absolute",
+                right: 2,
+                bottom: 2,
+                width: 28,
+                height: 28,
+                borderRadius: "50%",
+                background: "rgba(0,0,0,0.7)",
+                border: "1px solid rgba(255,255,255,0.2)",
+                fontSize: 14,
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+              }}
+            >
+              ✎
+            </span>
           </button>
-          <input ref={galleryRef} type="file" accept="image/*" hidden onChange={(e) => e.target.files?.[0] && uploadAvatar(e.target.files[0])} />
-          <input ref={fileRef} type="file" accept="image/*" hidden onChange={(e) => e.target.files?.[0] && uploadAvatar(e.target.files[0])} />
-          <input ref={cameraRef} type="file" accept="image/*" capture="user" hidden onChange={(e) => e.target.files?.[0] && uploadAvatar(e.target.files[0])} />
-          <div className="row" style={{ gap: 6, flexWrap: "wrap", justifyContent: "center" }}>
-            <button className="btn-ghost btn-sm" onClick={() => galleryRef.current?.click()}>Gallery</button>
-            <button className="btn-ghost btn-sm" onClick={() => fileRef.current?.click()}>Files</button>
-            <button className="btn-ghost btn-sm" onClick={() => cameraRef.current?.click()}>Camera</button>
-          </div>
+          <p className="muted" style={{ fontSize: 12 }}>Tap photo to update</p>
         </div>
 
         <div className="card stack">
@@ -157,6 +168,8 @@ export default function ProfilePage() {
           Settings
         </Link>
       </div>
+
+      <PhotoSheet open={photoOpen} onClose={() => setPhotoOpen(false)} onFile={onPhoto} busy={uploading} />
 
       {sheet && (
         <div className="modal-bg" onClick={() => setSheet(false)}>

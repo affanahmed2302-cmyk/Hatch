@@ -4,6 +4,8 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { supabase } from "@/lib/supabase";
 import { saveSparksProfile } from "@/lib/sparks";
+import { uploadUserAvatar } from "@/lib/uploadAvatar";
+import PhotoSheet from "@/components/PhotoSheet";
 import SparksNav from "@/components/SparksNav";
 
 const GENDERS = ["Woman", "Man", "Non-binary", "Prefer not to say"];
@@ -31,6 +33,8 @@ export default function SparksMePage() {
   const [msg, setMsg] = useState("");
   const [err, setErr] = useState("");
   const [loading, setLoading] = useState(true);
+  const [photoOpen, setPhotoOpen] = useState(false);
+  const [uploading, setUploading] = useState(false);
   const router = useRouter();
 
   useEffect(() => {
@@ -60,18 +64,37 @@ export default function SparksMePage() {
     })();
   }, [router]);
 
+  async function onPhoto(file: File) {
+    if (!userId) return;
+    setUploading(true); setErr(""); setMsg("");
+    const res = await uploadUserAvatar(userId, file);
+    setUploading(false);
+    if (!res.ok) {
+      setErr(res.error);
+      return;
+    }
+    setAvatar(res.url);
+    setMsg("Photo updated");
+    setPhotoOpen(false);
+  }
+
   async function save() {
     if (!userId) return;
     setErr(""); setMsg("");
-    if (!consent) { setErr("Confirm 18+ consent"); return; }
-    if (!gender) { setErr("Pick how you identify (helps matching)"); return; }
-    if (!headline.trim() && !vibe) { setErr("Add a short intro or vibe"); return; }
+    if (!consent) {
+      setErr("Confirm consent to continue");
+      return;
+    }
     if (!avatar) {
-      setErr("Add a profile photo on main Hatch profile first — dating needs a face");
+      setErr("Add a photo — tap the circle above");
+      return;
+    }
+    if (!gender) {
+      setErr("Select gender");
       return;
     }
     const res = await saveSparksProfile(userId, {
-      headline: headline || vibe,
+      headline,
       vibe,
       looking_for: looking,
       meet_pref: meet,
@@ -79,46 +102,79 @@ export default function SparksMePage() {
       gender,
       consent: true,
     });
-    if (!res.ok) setErr(res.error || "Save failed — run hatch_dating_fields.sql");
-    else setMsg("You're live on Sparks Discover");
+    if (!res.ok) setErr(res.error || "Save failed");
+    else setMsg("Dating profile saved · start discovering");
   }
 
   if (loading) {
-    return <div className="shell" style={{ display: "flex", alignItems: "center", justifyContent: "center" }}><span className="muted">…</span></div>;
+    return (
+      <div className="shell" style={{ display: "flex", alignItems: "center", justifyContent: "center" }}>
+        <span className="muted">…</span>
+      </div>
+    );
   }
 
   return (
-    <div className="shell" style={{ background: "#0a0610" }}>
-      <div className="topbar" style={{ background: "linear-gradient(90deg,#be185d,#7c3aed)", border: "none" }}>
-        <Link href="/home" className="btn-ghost btn-sm" style={{ color: "#fff" }}>Campus</Link>
-        <div style={{ fontWeight: 900, color: "#fff" }}>Dating profile</div>
+    <div className="shell">
+      <div className="topbar">
+        <Link href="/sparks" className="btn-ghost btn-sm">←</Link>
+        <div className="logo" style={{ fontSize: 14 }}>Sparks profile</div>
       </div>
-      <div className="page stack" style={{ paddingBottom: 90 }}>
-        <p className="muted" style={{ fontSize: 12, lineHeight: 1.45 }}>
-          This is for <strong>campus dating / hangouts</strong> — not jobs or GitHub.
-          Use a real photo + honest vibe.
-        </p>
-
-        <div className="card" style={{ textAlign: "center" }}>
-          <div style={{
-            width: 88, height: 88, borderRadius: "50%", margin: "0 auto",
-            background: avatar ? `url(${avatar}) center/cover` : "linear-gradient(135deg,#be185d,#4c1d95)",
-            border: "2px solid rgba(244,114,182,0.5)",
-          }} />
-          {!avatar && (
-            <p className="muted" style={{ fontSize: 12, marginTop: 8 }}>
-              No photo yet → <Link href="/profile">add on main profile</Link>
-            </p>
-          )}
+      <div className="page stack">
+        <div style={{ textAlign: "center" }}>
+          <button
+            type="button"
+            onClick={() => setPhotoOpen(true)}
+            aria-label="Change photo"
+            style={{
+              width: 110,
+              height: 110,
+              borderRadius: "50%",
+              margin: "0 auto 8px",
+              border: "2px solid rgba(244,114,182,0.5)",
+              background: avatar
+                ? `url(${avatar}) center/cover`
+                : "linear-gradient(135deg,#be185d,#4c1d95)",
+              position: "relative",
+              padding: 0,
+              display: "block",
+              cursor: "pointer",
+            }}
+          >
+            {!avatar && (
+              <span style={{ color: "#fff", fontSize: 13, fontWeight: 700 }}>Add photo</span>
+            )}
+            <span
+              style={{
+                position: "absolute",
+                right: 2,
+                bottom: 2,
+                width: 28,
+                height: 28,
+                borderRadius: "50%",
+                background: "rgba(0,0,0,0.75)",
+                fontSize: 14,
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                color: "#fff",
+              }}
+            >
+              ✎
+            </span>
+          </button>
+          <p className="muted" style={{ fontSize: 12 }}>Tap photo to change</p>
         </div>
 
-        <label className="row" style={{ gap: 8, alignItems: "center" }}>
+        <label className="row" style={{ gap: 10, alignItems: "flex-start" }}>
           <input type="checkbox" checked={consent} onChange={(e) => setConsent(e.target.checked)} />
-          <span style={{ fontSize: 12 }}>I am 18+ and want optional campus matching</span>
+          <span className="muted" style={{ fontSize: 13 }}>
+            I am 18+ and agree to respectful campus dating on Sparks.
+          </span>
         </label>
 
         <div>
-          <span className="label">I am</span>
+          <span className="label">Gender</span>
           <div className="row" style={{ gap: 6, flexWrap: "wrap" }}>
             {GENDERS.map((g) => (
               <button key={g} type="button" className={gender === g ? "btn btn-sm" : "btn-ghost btn-sm"} onClick={() => setGender(g)}>{g}</button>
@@ -173,6 +229,8 @@ export default function SparksMePage() {
         <button className="btn" onClick={save}>Save dating profile</button>
         <Link href="/sparks" className="btn-ghost" style={{ textAlign: "center" }}>Start discovering →</Link>
       </div>
+
+      <PhotoSheet open={photoOpen} onClose={() => setPhotoOpen(false)} onFile={onPhoto} busy={uploading} />
       <SparksNav />
     </div>
   );
