@@ -20,12 +20,16 @@ const PLACE_EMOJI: Record<string, string> = {
   "Main gate": "🚪",
 };
 
-const QUERY_HINTS = [
-  "Need 1 lab partner · DSP",
-  "Sharing notes · CIE 2",
-  "Anyone for filter coffee?",
-  "Looking for hackathon teammate",
-  "Quiet study · library 2nd floor",
+/** Activity-oriented — not exam/CIE heavy */
+const ACTIVITY_HINTS = [
+  "Coffee + chill · join?",
+  "Walk around campus",
+  "Gym buddy for 30 min",
+  "Food run · canteen",
+  "Jam session / music",
+  "Badminton / sports",
+  "Movie plan after class",
+  "Just free to talk",
 ];
 
 export default function HomePage() {
@@ -81,13 +85,9 @@ export default function HomePage() {
     if (!myId) return;
     const note = liveNote.trim();
     const res = await setFreeNow(myId, livePlace, note || undefined);
-    if (!res.ok) setErr(res.error || "Failed — run hatch_avatars_and_free_now.sql");
+    if (!res.ok) setErr(res.error || "Could not go live — check free_now table in Supabase");
     else {
-      setMsg(
-        note
-          ? `Live at ${livePlace}: “${note}” · others can Ping you`
-          : `Live at ${livePlace} · others can Ping you`
-      );
+      setMsg("You're visible for 15 min · friends can Ping you");
       haptic([10, 20, 10]);
       playPing();
       await refresh(myId);
@@ -178,20 +178,42 @@ export default function HomePage() {
           </Link>
         )}
 
-        {/* CAMPUS LIVE — place + unique query + ping */}
+        {/* I'M FREE — clearly defined so anyone gets it */}
         <div className="card" style={{
           marginBottom: 12,
-          border: "1px solid rgba(52,211,153,0.35)",
-          background: "linear-gradient(160deg,rgba(16,185,129,0.12),rgba(6,78,59,0.15))",
+          border: "1px solid rgba(52,211,153,0.4)",
+          background: "linear-gradient(160deg,rgba(16,185,129,0.14),rgba(6,78,59,0.18))",
         }}>
           <div className="row" style={{ marginBottom: 8 }}>
             <div style={{ flex: 1 }}>
-              <div style={{ fontWeight: 800, fontSize: 15 }}>🟢 Campus Live</div>
-              <p className="muted" style={{ fontSize: 11 }}>
-                Place + your unique ask · live 15 min · others Ping → chat
+              <div style={{ fontWeight: 800, fontSize: 16 }}>🟢 I'm Free</div>
+              <p style={{ fontSize: 13, marginTop: 4, lineHeight: 1.4, color: "#d1fae5" }}>
+                Tell campus you're free right now. People nearby (or online) tap <strong>Ping</strong> and chat opens.
               </p>
             </div>
-            <span className="badge" style={{ background: "#10b981", color: "#fff" }}>{free.length} live</span>
+            <span className="badge" style={{ background: "#10b981", color: "#fff" }}>{free.length} free</span>
+          </div>
+
+          <div
+            style={{
+              fontSize: 11,
+              color: "#a7f3d0",
+              marginBottom: 12,
+              padding: "8px 10px",
+              borderRadius: 12,
+              background: "rgba(0,0,0,0.2)",
+              lineHeight: 1.45,
+            }}
+          >
+            <strong>How it works</strong>
+            <br />
+            1 · Pick where you are
+            <br />
+            2 · Add what you want to do (coffee, walk, gym…)
+            <br />
+            3 · Tap <strong>I'm free here</strong> — you stay visible 15 min
+            <br />
+            4 · Someone taps <strong>Ping</strong> → you both chat
           </div>
 
           <p className="muted" style={{ fontSize: 11, marginBottom: 6 }}>Where are you?</p>
@@ -209,16 +231,16 @@ export default function HomePage() {
             ))}
           </div>
 
-          <p className="muted" style={{ fontSize: 11, marginBottom: 6 }}>Your unique query (optional)</p>
+          <p className="muted" style={{ fontSize: 11, marginBottom: 6 }}>What do you want to do?</p>
           <input
             value={liveNote}
             onChange={(e) => setLiveNote(e.target.value)}
-            placeholder="e.g. Need lab partner · DSP notes"
+            placeholder="e.g. Coffee + chill · join?"
             maxLength={120}
             style={{ marginBottom: 8 }}
           />
           <div className="row" style={{ gap: 6, flexWrap: "wrap", marginBottom: 10 }}>
-            {QUERY_HINTS.map((h) => (
+            {ACTIVITY_HINTS.map((h) => (
               <button
                 key={h}
                 type="button"
@@ -232,8 +254,14 @@ export default function HomePage() {
           </div>
 
           <button className="btn" style={{ width: "100%", marginBottom: 12 }} onClick={goLive}>
-            Go live at {livePlace}
+            I'm free at {livePlace}
           </button>
+
+          {free.length > 0 && (
+            <p className="muted" style={{ fontSize: 11, marginBottom: 8 }}>
+              Free now — Ping to start a chat
+            </p>
+          )}
 
           {free.map((f: any) => (
             <div
@@ -279,7 +307,7 @@ export default function HomePage() {
           ))}
           {!free.length && (
             <p className="muted" style={{ fontSize: 12 }}>
-              Nobody live yet — go live with your query so others can Ping you
+              No one free yet — be first. Pick a place + activity → I'm free here.
             </p>
           )}
         </div>
