@@ -42,7 +42,10 @@ export default function ProfilePage() {
   const [lockOn, setLockOn] = useState(false);
   const [newPin, setNewPin] = useState("");
   const [invite, setInvite] = useState("");
-  const inputRef = useRef<HTMLInputElement>(null);
+  const [photoSheet, setPhotoSheet] = useState(false);
+  const galleryRef = useRef<HTMLInputElement>(null);
+  const filesRef = useRef<HTMLInputElement>(null);
+  const cameraRef = useRef<HTMLInputElement>(null);
   const router = useRouter();
 
   useEffect(() => {
@@ -96,7 +99,10 @@ export default function ProfilePage() {
 
   function onPick(f: File | null) {
     if (!f) return;
-    if (!f.type.startsWith("image/")) { setErr("Pick an image"); return; }
+    if (!f.type.startsWith("image/") && !/\.(jpe?g|png|webp|gif|heic)$/i.test(f.name)) {
+      setErr("Pick an image file");
+      return;
+    }
     if (f.size > 5 * 1024 * 1024) { setErr("Max 5MB"); return; }
     setFile(f);
     setPreview(URL.createObjectURL(f));
@@ -107,14 +113,14 @@ export default function ProfilePage() {
     if (!file) return avatarUrl;
     const ext = file.name.split(".").pop() || "jpg";
     const path = uid + "/avatar." + ext;
-    const { error } = await supabase.storage.from("avatars").upload(path, file, { upsert: true, contentType: file.type });
+    const { error } = await supabase.storage.from("avatars").upload(path, file, { upsert: true, contentType: file.type || "image/jpeg" });
     if (error) {
       if (error.message.includes("Bucket") || error.message.includes("not found"))
         throw new Error("Create public Storage bucket named avatars");
       throw new Error(error.message);
     }
     const { data: pub } = supabase.storage.from("avatars").getPublicUrl(path);
-    return pub.publicUrl;
+    return pub.publicUrl + "?t=" + Date.now();
   }
 
   async function save() {
@@ -215,7 +221,6 @@ export default function ProfilePage() {
         >⚙️</button>
       </div>
 
-      {/* Settings sheet */}
       {sheet && (
         <div style={{
           position: "fixed", inset: 0, zIndex: 85, background: "rgba(0,0,0,0.65)",
@@ -301,7 +306,6 @@ export default function ProfilePage() {
           {isSuperAdmin(email) ? "Super admin" : "Public face of your campus identity"}
         </p>
 
-        {/* Strength race meter */}
         <div className="card" style={{ marginBottom: 14, background: "linear-gradient(135deg,rgba(124,58,237,0.15),rgba(236,72,153,0.08))" }}>
           <div className="row" style={{ justifyContent: "space-between", marginBottom: 6 }}>
             <span style={{ fontWeight: 700, fontSize: 13 }}>Profile strength</span>
@@ -324,17 +328,90 @@ export default function ProfilePage() {
 
         <div className="card stack" style={{ marginBottom: 14, alignItems: "center" }}>
           <div
-            onClick={() => inputRef.current?.click()}
+            onClick={() => setPhotoSheet(true)}
             style={{
               width: 100, height: 100, borderRadius: "50%",
               background: preview ? "url(" + preview + ") center/cover" : "var(--grad-cool)",
               border: "3px solid rgba(139,92,246,0.45)", cursor: "pointer",
               display: "flex", alignItems: "center", justifyContent: "center", fontSize: 12, fontWeight: 600,
             }}
-          >{!preview && "Photo"}</div>
-          <input ref={inputRef} type="file" accept="image/*" hidden onChange={(e) => onPick(e.target.files?.[0] || null)} />
-          <button type="button" className="btn-ghost btn-sm" onClick={() => inputRef.current?.click()}>Select from gallery</button>
+          >{!preview && "Add photo"}</div>
+          <input
+            ref={galleryRef}
+            type="file"
+            accept="image/*"
+            hidden
+            onChange={(e) => { onPick(e.target.files?.[0] || null); setPhotoSheet(false); e.target.value = ""; }}
+          />
+          <input
+            ref={filesRef}
+            type="file"
+            accept="image/jpeg,image/png,image/webp,image/gif,image/heic,.jpg,.jpeg,.png,.webp,.gif,.heic"
+            hidden
+            onChange={(e) => { onPick(e.target.files?.[0] || null); setPhotoSheet(false); e.target.value = ""; }}
+          />
+          <input
+            ref={cameraRef}
+            type="file"
+            accept="image/*"
+            capture="environment"
+            hidden
+            onChange={(e) => { onPick(e.target.files?.[0] || null); setPhotoSheet(false); e.target.value = ""; }}
+          />
+          <button type="button" className="btn-ghost btn-sm" onClick={() => setPhotoSheet(true)}>
+            Change photo
+          </button>
+          <p className="muted" style={{ fontSize: 11, textAlign: "center" }}>
+            Gallery · Files · Camera · max 5MB
+          </p>
         </div>
+
+        {photoSheet && (
+          <div
+            style={{
+              position: "fixed", inset: 0, zIndex: 90, background: "rgba(0,0,0,0.7)",
+              display: "flex", alignItems: "flex-end", justifyContent: "center",
+            }}
+            onClick={() => setPhotoSheet(false)}
+          >
+            <div
+              className="card"
+              style={{
+                width: "min(440px, 100%)", borderRadius: "20px 20px 0 0", margin: 0, padding: 16,
+              }}
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="h2" style={{ marginBottom: 12 }}>Upload profile photo</div>
+              <button
+                type="button"
+                className="btn"
+                style={{ width: "100%", marginBottom: 8 }}
+                onClick={() => galleryRef.current?.click()}
+              >
+                🖼  Photo gallery
+              </button>
+              <button
+                type="button"
+                className="btn-ghost"
+                style={{ width: "100%", marginBottom: 8 }}
+                onClick={() => filesRef.current?.click()}
+              >
+                📁  Choose from files
+              </button>
+              <button
+                type="button"
+                className="btn-ghost"
+                style={{ width: "100%", marginBottom: 8 }}
+                onClick={() => cameraRef.current?.click()}
+              >
+                📷  Take photo
+              </button>
+              <button type="button" className="btn-ghost" style={{ width: "100%" }} onClick={() => setPhotoSheet(false)}>
+                Cancel
+              </button>
+            </div>
+          </div>
+        )}
 
         <div className="card stack" style={{ marginBottom: 14 }}>
           <div className="h2">Public identity</div>
