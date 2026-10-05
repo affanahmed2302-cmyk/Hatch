@@ -114,43 +114,43 @@ export default function HomePage() {
         {msg && <div className="ok" style={{ marginBottom: 10 }}>{msg}</div>}
         {err && <div className="fail" style={{ marginBottom: 10 }}>{err}</div>}
 
-        <div style={{ marginBottom: 16 }}>
-          <h1 className="h1" style={{ fontSize: 22, marginBottom: 4 }}>Hey {first}</h1>
-          <p className="muted" style={{ fontSize: 13 }}>
-            {tier.emoji} {streak}-day streak · campus network
+        <div className="hero-card">
+          <h1 className="h1" style={{ fontSize: 24, marginBottom: 6, position: "relative", zIndex: 1 }}>
+            Hey {first} 👋
+          </h1>
+          <p className="muted" style={{ fontSize: 13, position: "relative", zIndex: 1 }}>
+            {tier.emoji} <strong style={{ color: "#e9d5ff" }}>{streak}-day streak</strong>
+            {" "}· your campus network is live
           </p>
-        </div>
-
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 12 }}>
-          <Link href="/discover" className="card" style={{
-            textDecoration: "none", color: "inherit", margin: 0,
-            background: "linear-gradient(135deg,rgba(139,92,246,0.25),rgba(236,72,153,0.12))",
-            border: "1px solid rgba(167,139,250,0.4)",
-          }}>
-            <div style={{ fontWeight: 800, fontSize: 15 }}>Find people</div>
-            <p className="muted" style={{ fontSize: 11, marginTop: 4 }}>Skills · teams · chat</p>
-          </Link>
-          <Link href="/lounge" className="card" style={{
-            textDecoration: "none", color: "inherit", margin: 0,
-            background: "linear-gradient(135deg,rgba(88,101,242,0.3),rgba(124,58,237,0.15))",
-            border: "1px solid rgba(88,101,242,0.45)",
-          }}>
-            <div style={{ fontWeight: 800, fontSize: 15 }}>Lounge</div>
-            <p className="muted" style={{ fontSize: 11, marginTop: 4 }}>Open campus chat</p>
-          </Link>
-        </div>
-
-        <Link href="/inbox" className="card" style={{
-          display: "block", marginBottom: 12, textDecoration: "none", color: "inherit",
-        }}>
-          <div className="row" style={{ justifyContent: "space-between" }}>
-            <div>
-              <div style={{ fontWeight: 700, fontSize: 14 }}>Messages</div>
-              <p className="muted" style={{ fontSize: 11 }}>DMs & connections</p>
-            </div>
-            <span className="muted">→</span>
+          <div className="pill-row" style={{ position: "relative", zIndex: 1 }}>
+            <span className="pill hot">BMSCE</span>
+            <span className="pill">Online</span>
           </div>
-        </Link>
+        </div>
+
+        <div className="section-label">Go somewhere</div>
+        <div className="quick-grid">
+          <Link href="/discover" className="quick-tile violet">
+            <span className="qt-ico">◎</span>
+            <div className="qt-title">Find people</div>
+            <div className="qt-sub">Skills · teams · chat</div>
+          </Link>
+          <Link href="/lounge" className="quick-tile pink">
+            <span className="qt-ico">◈</span>
+            <div className="qt-title">Lounge</div>
+            <div className="qt-sub">Open campus chat</div>
+          </Link>
+          <Link href="/inbox" className="quick-tile cyan">
+            <span className="qt-ico">◇</span>
+            <div className="qt-title">Messages</div>
+            <div className="qt-sub">DMs & connections</div>
+          </Link>
+          <Link href="/clubs" className="quick-tile emerald">
+            <span className="qt-ico">✦</span>
+            <div className="qt-title">Clubs</div>
+            <div className="qt-sub">Events & boards</div>
+          </Link>
+        </div>
 
         {blackout && (
           <Link href="/explore" className="card" style={{
@@ -163,7 +163,6 @@ export default function HomePage() {
           </Link>
         )}
 
-        {/* FREE NOW — attractive live cards */}
         <div className="card" style={{
           marginBottom: 12,
           border: "1px solid rgba(52,211,153,0.35)",
