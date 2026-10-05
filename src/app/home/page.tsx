@@ -20,7 +20,6 @@ const PLACE_EMOJI: Record<string, string> = {
   "Main gate": "🚪",
 };
 
-/** Activity-oriented — not exam/CIE heavy */
 const ACTIVITY_HINTS = [
   "Coffee + chill · join?",
   "Walk around campus",
@@ -80,6 +79,12 @@ export default function HomePage() {
       setLoading(false);
     })();
   }, [router]);
+
+  useEffect(() => {
+    if (!myId) return;
+    const id = window.setInterval(() => { void refresh(myId); }, 20000);
+    return () => clearInterval(id);
+  }, [myId]);
 
   async function goLive() {
     if (!myId) return;
@@ -178,7 +183,6 @@ export default function HomePage() {
           </Link>
         )}
 
-        {/* I'M FREE — clearly defined so anyone gets it */}
         <div className="card" style={{
           marginBottom: 12,
           border: "1px solid rgba(52,211,153,0.4)",
@@ -209,11 +213,11 @@ export default function HomePage() {
             <br />
             1 · Pick where you are
             <br />
-            2 · Add what you want to do (coffee, walk, gym…)
+            2 · Tap an activity (or type your own)
             <br />
-            3 · Tap <strong>I'm free here</strong> — you stay visible 15 min
+            3 · Tap <strong>I'm free at …</strong> — visible 15 min
             <br />
-            4 · Someone taps <strong>Ping</strong> → you both chat
+            4 · Someone taps <strong>Ping</strong> → chat
           </div>
 
           <p className="muted" style={{ fontSize: 11, marginBottom: 6 }}>Where are you?</p>
@@ -244,8 +248,8 @@ export default function HomePage() {
               <button
                 key={h}
                 type="button"
-                className="btn-ghost btn-sm"
-                style={{ fontSize: 11 }}
+                className={liveNote === h ? "chip on" : "chip"}
+                style={{ fontSize: 11, borderColor: "rgba(52,211,153,0.35)" }}
                 onClick={() => setLiveNote(h)}
               >
                 {h}
@@ -259,7 +263,7 @@ export default function HomePage() {
 
           {free.length > 0 && (
             <p className="muted" style={{ fontSize: 11, marginBottom: 8 }}>
-              Free now — Ping to start a chat
+              Free now — list refreshes live · Ping to chat
             </p>
           )}
 
@@ -307,7 +311,7 @@ export default function HomePage() {
           ))}
           {!free.length && (
             <p className="muted" style={{ fontSize: 12 }}>
-              No one free yet — be first. Pick a place + activity → I'm free here.
+              No one free yet — be first. Pick place + activity → I'm free at …
             </p>
           )}
         </div>
