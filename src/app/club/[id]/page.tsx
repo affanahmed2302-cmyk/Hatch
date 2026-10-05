@@ -14,7 +14,7 @@ export default function ClubBoardPage() {
   const [email, setEmail] = useState("");
   const [club, setClub] = useState<any>(null);
   const [posts, setPosts] = useState<any[]>([]);
-  const [counts, setCounts] = useState<Record<string, Record<string, number>>>({{}});
+  const [counts, setCounts] = useState<Record<string, Record<string, number>>>({});
   const [isAdmin, setIsAdmin] = useState(false);
   const [title, setTitle] = useState("");
   const [body, setBody] = useState("");
