@@ -40,9 +40,10 @@ export default function HomePage() {
   const [loading, setLoading] = useState(true);
   const [blackout, setBlackout] = useState(false);
   const [cd, setCd] = useState("");
+  const [needsPhoto, setNeedsPhoto] = useState(false);
   const router = useRouter();
 
-  async function refresh(uid: string) {
+  async function refresh(_uid: string) {
     const [f, p, ce] = await Promise.all([fetchFreeNow(), fetchPulseFeed(), fetchFeedEvents(5)]);
     setFree(f);
     setPulse(p.ok ? p.data : []);
@@ -57,8 +58,9 @@ export default function HomePage() {
       touchPresence(user.id);
       ensureNotifyPermission();
       setStreak(await bumpOpenStreak(user.id));
-      const { data: prof } = await supabase.from("profiles").select("full_name, username").eq("id", user.id).maybeSingle();
+      const { data: prof } = await supabase.from("profiles").select("full_name, username, avatar_url").eq("id", user.id).maybeSingle();
       setName(prof?.full_name || prof?.username || "there");
+      setNeedsPhoto(!prof?.avatar_url);
       await refresh(user.id);
       setBlackout(isMidnightBlackout());
       setCd(blackoutCountdown());
@@ -74,8 +76,7 @@ export default function HomePage() {
 
   async function goLive() {
     if (!myId) return;
-    const note = liveNote.trim();
-    const res = await setFreeNow(myId, livePlace, note || undefined);
+    const res = await setFreeNow(myId, livePlace, liveNote.trim() || undefined);
     if (!res.ok) setErr(res.error || "Could not go live");
     else {
       setMsg("You're visible for 15 min · friends can Ping you");
@@ -142,6 +143,17 @@ export default function HomePage() {
           </p>
         </div>
 
+        {needsPhoto && (
+          <Link href="/profile" className="card" style={{
+            display: "block", marginBottom: 12, textDecoration: "none", color: "inherit",
+            border: "1px solid rgba(251,191,36,0.35)",
+            background: "linear-gradient(160deg, rgba(251,191,36,0.12), rgba(22,22,32,0.85))",
+          }}>
+            <div style={{ fontWeight: 800, fontSize: 14 }}>Finish your profile</div>
+            <p className="muted" style={{ fontSize: 12, marginTop: 4 }}>Add a photo so people can recognize you · 30 seconds</p>
+          </Link>
+        )}
+
         <div className="section-label">Go somewhere</div>
         <div className="quick-grid">
           <Link href="/discover" className="quick-tile violet"><span className="qt-ico">◎</span><div className="qt-title">Find people</div><div className="qt-sub">Skills · teams</div></Link>
@@ -201,25 +213,16 @@ export default function HomePage() {
           </div>
 
           {pulseList.slice(0, 10).map((p: any, i: number) => (
-            <div
-              key={p.id}
-              onDoubleClick={() => openPulseAuthor(p.author_id)}
-              title="Double-tap opens profile"
-              style={{
-                marginBottom: 10, padding: "12px 14px", borderRadius: 16, background: "rgba(0,0,0,0.28)",
-                border: "1px solid rgba(255,255,255,0.08)",
-                borderLeft: `3px solid ${["#a855f7", "#ec4899", "#22d3ee", "#fbbf24"][i % 4]}`,
-                cursor: "pointer",
-              }}
-            >
+            <div key={p.id} onDoubleClick={() => openPulseAuthor(p.author_id)} title="Double-tap opens profile" style={{
+              marginBottom: 10, padding: "12px 14px", borderRadius: 16, background: "rgba(0,0,0,0.28)",
+              border: "1px solid rgba(255,255,255,0.08)",
+              borderLeft: `3px solid ${["#a855f7", "#ec4899", "#22d3ee", "#fbbf24"][i % 4]}`,
+              cursor: "pointer",
+            }}>
               <div className="row" style={{ justifyContent: "space-between", alignItems: "flex-start", gap: 8 }}>
                 <p style={{ fontSize: 14, lineHeight: 1.45, fontWeight: 500, flex: 1 }}>{p.content}</p>
-                <button
-                  type="button"
-                  className="btn-ghost btn-sm"
-                  style={{ padding: "2px 10px", fontSize: 16, lineHeight: 1 }}
-                  onClick={(e) => { e.stopPropagation(); setPulseMenu(pulseMenu === p.id ? null : p.id); }}
-                >···</button>
+                <button type="button" className="btn-ghost btn-sm" style={{ padding: "2px 10px", fontSize: 16, lineHeight: 1 }}
+                  onClick={(e) => { e.stopPropagation(); setPulseMenu(pulseMenu === p.id ? null : p.id); }}>···</button>
               </div>
               {pulseMenu === p.id && (
                 <div style={{ marginTop: 8, padding: 8, borderRadius: 12, background: "rgba(15,15,22,0.95)", border: "1px solid rgba(255,255,255,0.1)" }} onClick={(e) => e.stopPropagation()}>
@@ -233,7 +236,7 @@ export default function HomePage() {
                   )}
                 </div>
               )}
-              <div className="row" style={{ marginTop: 8, gap: 8 }}>
+              <div className="row" style={{ marginTop: 8 }}>
                 <span className="muted" style={{ fontSize: 11 }}>{p.is_anonymous !== false ? "Anonymous" : "Student"} · {timeAgo(p.created_at)}</span>
               </div>
             </div>
