@@ -5,6 +5,7 @@ import LiveAlerts from "./LiveAlerts";
 import NotifyPrompt from "./NotifyPrompt";
 import PilotButton from "./PilotButton";
 import SplashScreen from "./SplashScreen";
+import ErrorBoundary from "./ErrorBoundary";
 import { supabase } from "@/lib/supabase";
 import { registerPushSubscription } from "@/lib/pushClient";
 
@@ -14,20 +15,27 @@ export default function Providers({ children }: { children: React.ReactNode }) {
       navigator.serviceWorker.register("/sw.js").catch(() => {});
     }
     (async () => {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (user) {
-        setTimeout(() => registerPushSubscription(user.id), 1500);
+      try {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (user) {
+          setTimeout(() => {
+            registerPushSubscription(user.id).catch(() => {});
+          }, 1500);
+        }
+      } catch {
+        /* offline / auth unavailable */
       }
     })();
   }, []);
+
   return (
-    <>
+    <ErrorBoundary>
       <SplashScreen />
       {children}
       <LiveAlerts />
       <NotifyPrompt />
       <InstallBanner />
       <PilotButton />
-    </>
+    </ErrorBoundary>
   );
 }

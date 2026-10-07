@@ -12,39 +12,99 @@ export default function LoginPage() {
   const router = useRouter();
 
   async function login() {
-    setErr(""); setLoading(true);
+    setErr("");
+    setLoading(true);
     try {
+      const em = email.trim().toLowerCase();
+      if (!em.includes("@")) {
+        setErr("Enter a valid email");
+        setLoading(false);
+        return;
+      }
+      if (!password) {
+        setErr("Enter your password");
+        setLoading(false);
+        return;
+      }
       const { data, error } = await supabase.auth.signInWithPassword({
-        email: email.trim().toLowerCase(),
+        email: em,
         password,
       });
-      if (error) { setErr(error.message); setLoading(false); return; }
+      if (error) {
+        const m = error.message || "";
+        if (m.toLowerCase().includes("invalid login") || m.toLowerCase().includes("invalid credentials")) {
+          setErr("Wrong email or password");
+        } else if (m.toLowerCase().includes("confirm") || m.toLowerCase().includes("not confirmed")) {
+          setErr("Confirm your email from the inbox link, then log in");
+        } else {
+          setErr(m);
+        }
+        setLoading(false);
+        return;
+      }
       if (data.user) {
         await ensureProfile(data.user.id, data.user.email);
-        if (await needsTermsAcceptance(data.user.id)) router.replace("/terms");
-        else router.replace("/home");
+        try {
+          if (await needsTermsAcceptance(data.user.id)) {
+            router.replace("/terms");
+            return;
+          }
+        } catch {
+          /* continue to home */
+        }
+        router.replace("/home");
       }
     } catch (e: any) {
-      setErr(e?.message || "Login failed");
+      setErr(e?.message || "Login failed — check network");
     }
     setLoading(false);
   }
 
   return (
-    <div className="shell" style={{ padding: 24, display: "flex", flexDirection: "column", justifyContent: "center", minHeight: "100dvh" }}>
+    <div
+      className="shell"
+      style={{
+        padding: 24,
+        display: "flex",
+        flexDirection: "column",
+        justifyContent: "center",
+        minHeight: "100dvh",
+      }}
+    >
       <div className="logo" style={{ marginBottom: 20 }}>HATCH</div>
-      <h1 className="h1" style={{ marginBottom: 16 }}>Welcome back</h1>
+      <h1 className="h1" style={{ marginBottom: 8 }}>Welcome back</h1>
+      <p className="muted" style={{ fontSize: 13, marginBottom: 16 }}>
+        College network · BMSCE first
+      </p>
       {err && <div className="fail" style={{ marginBottom: 10 }}>{err}</div>}
       <div className="stack">
-        <input type="email" placeholder="Email" value={email} onChange={e => setEmail(e.target.value)} />
-        <input type="password" placeholder="Password" value={password} onChange={e => setPassword(e.target.value)} onKeyDown={e => e.key === "Enter" && login()} />
-        <button className="btn" onClick={login} disabled={loading}>{loading ? "…" : "Log in"}</button>
+        <input
+          type="email"
+          placeholder="Email"
+          value={email}
+          onChange={(e) => setEmail(e.target.value)}
+          autoComplete="email"
+          inputMode="email"
+        />
+        <input
+          type="password"
+          placeholder="Password"
+          value={password}
+          onChange={(e) => setPassword(e.target.value)}
+          onKeyDown={(e) => e.key === "Enter" && login()}
+          autoComplete="current-password"
+        />
+        <button className="btn" onClick={login} disabled={loading}>
+          {loading ? "Signing in…" : "Log in"}
+        </button>
       </div>
       <p style={{ marginTop: 12, fontSize: 13 }}>
-        <Link href="/forgot-password" className="muted">Forgot password?</Link>
+        <Link href="/forgot-password" className="muted">
+          Forgot password?
+        </Link>
       </p>
       <p className="muted" style={{ marginTop: 16, fontSize: 13 }}>
-        New here? <Link href="/signup">Sign up</Link>
+        New here? <Link href="/signup">Create account</Link>
       </p>
     </div>
   );

@@ -12,8 +12,7 @@ export async function saveSparksProfile(
     consent?: boolean
   }
 ) {
-  // Do NOT write gender into sparks_profiles — column may not exist.
-  // Gender is stored on profiles only.
+  // Gender lives on profiles only — sparks_profiles may lack that column
   const payload: any = {
     user_id: userId,
     headline: (fields.headline || '').trim() || null,
@@ -149,3 +148,7 @@ export async function fetchSparksLikes(myId: string) {
     return []
   }
 }
+
+/** Aliases used by Sparks likes/matches pages */
+export const fetchMatches = fetchSparksMatches
+export const fetchLikesYou = fetchSparksLikes
