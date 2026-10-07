@@ -7,10 +7,7 @@ import { supabase, isAllowedCollegeEmail, ensureProfile, collegePodFromEmail, ex
 export default function SignupPage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [phone, setPhone] = useState("");
-  const [otp, setOtp] = useState("");
-  const [sentOtp, setSentOtp] = useState("");
-  const [step, setStep] = useState<"form" | "otp">("form");
+  const [name, setName] = useState("");
   const [err, setErr] = useState("");
   const [msg, setMsg] = useState("");
   const [loading, setLoading] = useState(false);
@@ -25,43 +22,41 @@ export default function SignupPage() {
     } catch { /* ignore */ }
   }, []);
 
-  function startOtp() {
+  async function signup() {
     setErr("");
-    const domain = isAllowedCollegeEmail(email);
-    if (!domain.ok) { setErr(domain.error || "Invalid email"); return; }
-    if (password.length < 6) { setErr("Password min 6 characters"); return; }
-    const ph = phone.replace(/\D/g, "");
-    if (ph.length < 10) { setErr("Enter a valid 10-digit phone"); return; }
-    const code = String(Math.floor(100000 + Math.random() * 900000));
-    setSentOtp(code);
-    setStep("otp");
-    setMsg(`Dev OTP (SMS not wired yet — use this code): ${code}`);
-  }
-
-  async function finishSignup() {
-    setErr(""); setLoading(true);
+    setLoading(true);
     try {
-      if (otp !== sentOtp) { setErr("Wrong OTP"); setLoading(false); return; }
       const em = email.trim().toLowerCase();
+      const domain = isAllowedCollegeEmail(em);
+      if (!domain.ok) { setErr(domain.error || "Use your college email"); setLoading(false); return; }
+      if (password.length < 6) { setErr("Password min 6 characters"); setLoading(false); return; }
+      if (name.trim().length < 2) { setErr("Enter your name"); setLoading(false); return; }
+
       const { data, error } = await supabase.auth.signUp({ email: em, password });
       if (error) { setErr(error.message); setLoading(false); return; }
+
       const uid = data.user?.id;
       if (uid) {
         await ensureProfile(uid, em);
         const pod = collegePodFromEmail(em);
-        const domain = extractDomain(em);
+        const dom = extractDomain(em);
+        const uname = name.trim().toLowerCase().replace(/[^a-z0-9_]/g, "").slice(0, 16) || "user";
         await supabase.from("profiles").update({
-          phone: phone.replace(/\D/g, "").slice(-10),
-          phone_verified: true,
-          email_verified: !!data.user?.email_confirmed_at,
+          full_name: name.trim(),
+          username: uname + String(Math.floor(Math.random() * 90 + 10)),
           college: pod.toUpperCase(),
           college_pod: pod,
-          college_domain: domain,
+          college_domain: dom,
           referred_by: refCode || null,
+          terms_accepted: true,
+          terms_accepted_at: new Date().toISOString(),
         }).eq("id", uid);
       }
-      setMsg("Account created");
-      router.replace("/terms");
+
+      setMsg("Account created — set a photo on Profile when ready");
+      // Skip long OTP + terms maze → home (or login if email confirm required)
+      if (data.session) router.replace("/home");
+      else router.replace("/login");
     } catch (e: any) {
       setErr(e?.message || "Signup failed");
     }
@@ -70,30 +65,26 @@ export default function SignupPage() {
 
   return (
     <div className="shell" style={{ padding: 24, display: "flex", flexDirection: "column", justifyContent: "center", minHeight: "100dvh" }}>
-      <div className="logo" style={{ marginBottom: 20 }}>HATCH</div>
-      <h1 className="h1" style={{ marginBottom: 8 }}>Join campus</h1>
-      <p className="muted" style={{ fontSize: 13, marginBottom: 16 }}>
-        College email required (.ac.in / .edu). Auto-assigns your college pod.
-      </p>
+      <div className="logo" style={{ marginBottom: 16 }}>HATCH</div>
+      <h1 className="h1" style={{ marginBottom: 6 }}>Join in 30 seconds</h1>
+      <p className="muted" style={{ fontSize: 13, marginBottom: 16 }}>College email + password. Photo later on Profile.</p>
       {err && <div className="fail" style={{ marginBottom: 10 }}>{err}</div>}
       {msg && <div className="ok" style={{ marginBottom: 10 }}>{msg}</div>}
-      {step === "form" ? (
-        <div className="stack">
-          <input type="email" placeholder="College email" value={email} onChange={e => setEmail(e.target.value)} />
-          <input type="password" placeholder="Password (min 6)" value={password} onChange={e => setPassword(e.target.value)} />
-          <input type="tel" placeholder="Phone" value={phone} onChange={e => setPhone(e.target.value)} />
-          {refCode && <p className="muted" style={{ fontSize: 12 }}>Invite code: {refCode}</p>}
-          <button className="btn" onClick={startOtp}>Continue</button>
-        </div>
-      ) : (
-        <div className="stack">
-          <input inputMode="numeric" placeholder="Enter OTP" value={otp} onChange={e => setOtp(e.target.value)} />
-          <button className="btn" onClick={finishSignup} disabled={loading}>{loading ? "Creating…" : "Verify & create"}</button>
-          <button className="btn-ghost" onClick={() => setStep("form")}>Back</button>
-        </div>
-      )}
+      <div className="stack">
+        <input placeholder="Your name" value={name} onChange={(e) => setName(e.target.value)} autoComplete="name" />
+        <input type="email" placeholder="College email" value={email} onChange={(e) => setEmail(e.target.value)} autoComplete="email" />
+        <input
+          type="password"
+          placeholder="Password (min 6)"
+          value={password}
+          onChange={(e) => setPassword(e.target.value)}
+          onKeyDown={(e) => e.key === "Enter" && signup()}
+          autoComplete="new-password"
+        />
+        <button className="btn" onClick={signup} disabled={loading}>{loading ? "…" : "Create account"}</button>
+      </div>
       <p className="muted" style={{ marginTop: 16, fontSize: 13 }}>
-        Have an account? <Link href="/login">Log in</Link>
+        Already have an account? <Link href="/login">Log in</Link>
       </p>
     </div>
   );
