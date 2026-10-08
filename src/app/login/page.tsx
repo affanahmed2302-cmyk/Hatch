@@ -3,12 +3,14 @@ import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { supabase, ensureProfile, needsTermsAcceptance } from "@/lib/supabase";
+import { signInWithGoogle } from "@/lib/googleAuth";
 
 export default function LoginPage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [err, setErr] = useState("");
   const [loading, setLoading] = useState(false);
+  const [gLoading, setGLoading] = useState(false);
   const router = useRouter();
 
   async function login() {
@@ -60,6 +62,16 @@ export default function LoginPage() {
     setLoading(false);
   }
 
+  async function google() {
+    setErr("");
+    setGLoading(true);
+    const res = await signInWithGoogle();
+    if (!res.ok) {
+      setErr(res.error || "Google sign-in unavailable — enable Google in Supabase Auth");
+      setGLoading(false);
+    }
+  }
+
   return (
     <div
       className="shell"
@@ -77,6 +89,19 @@ export default function LoginPage() {
         College network · BMSCE first
       </p>
       {err && <div className="fail" style={{ marginBottom: 10 }}>{err}</div>}
+      <button
+        type="button"
+        className="btn"
+        style={{ width: "100%", marginBottom: 12, background: "linear-gradient(135deg,#fff,#e2e8f0)", color: "#0f172a" }}
+        onClick={google}
+        disabled={gLoading}
+      >
+        {gLoading ? "Redirecting…" : "Continue with Google"}
+      </button>
+      <p className="muted" style={{ fontSize: 12, marginBottom: 14, textAlign: "center" }}>
+        Prefer college Google (.ac.in / .edu) · proves real mailbox
+      </p>
+      <p className="muted" style={{ fontSize: 11, marginBottom: 10, textAlign: "center" }}>or email</p>
       <div className="stack">
         <input
           type="email"
