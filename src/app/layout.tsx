@@ -3,13 +3,27 @@ import "./globals.css";
 import Providers from "@/components/Providers";
 
 export const metadata: Metadata = {
+  metadataBase: new URL("https://hatch-primeora.vercel.app"),
   title: {
-    default: "Hatch — Campus Network",
+    default: "Hatch — BMS Campus Network",
     template: "%s · Hatch",
   },
-  description: "Find teammates. Ship projects. Grow your career. Built for campus.",
+  description:
+    "Find teammates. Chat. I'm Free on campus. Optional Sparks. Built for BMSCE students.",
   applicationName: "Hatch",
   manifest: "/manifest.json",
+  openGraph: {
+    title: "Hatch — BMS Campus Network",
+    description: "College network for BMSCE — people, chat, presence, Sparks.",
+    url: "https://hatch-primeora.vercel.app",
+    siteName: "Hatch",
+    type: "website",
+  },
+  twitter: {
+    card: "summary",
+    title: "Hatch — BMS Campus Network",
+    description: "Find teammates. Chat. Campus presence.",
+  },
   appleWebApp: {
     capable: true,
     statusBarStyle: "black-translucent",
@@ -20,8 +34,8 @@ export const metadata: Metadata = {
     "mobile-web-app-capable": "yes",
   },
   icons: {
-    icon: [{ url: "/icon.svg?v=energy-h-v4", type: "image/svg+xml" }],
-    apple: [{ url: "/icon.svg?v=energy-h-v4" }],
+    icon: [{ url: "/icon.svg?v=energy-h-v5", type: "image/svg+xml" }],
+    apple: [{ url: "/icon.svg?v=energy-h-v5" }],
   },
 };
 
@@ -41,8 +55,8 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="en">
       <head>
-        <link rel="apple-touch-icon" href="/icon.svg?v=energy-h-v4" />
-        <link rel="icon" href="/icon.svg?v=energy-h-v4" type="image/svg+xml" />
+        <link rel="apple-touch-icon" href="/icon.svg?v=energy-h-v5" />
+        <link rel="icon" href="/icon.svg?v=energy-h-v5" type="image/svg+xml" />
         <meta name="apple-mobile-web-app-capable" content="yes" />
         <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
         <meta name="apple-mobile-web-app-title" content="Hatch" />

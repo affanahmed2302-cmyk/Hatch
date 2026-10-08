@@ -1,0 +1,7 @@
+User-agent: *
+Allow: /
+Disallow: /pilot
+Disallow: /admin
+Disallow: /api/
+
+Sitemap: https://hatch-primeora.vercel.app/sitemap.xml

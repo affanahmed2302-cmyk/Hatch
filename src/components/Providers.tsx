@@ -6,6 +6,7 @@ import NotifyPrompt from "./NotifyPrompt";
 import PilotButton from "./PilotButton";
 import SplashScreen from "./SplashScreen";
 import ErrorBoundary from "./ErrorBoundary";
+import OfflineBanner from "./OfflineBanner";
 import { supabase } from "@/lib/supabase";
 import { registerPushSubscription } from "@/lib/pushClient";
 
@@ -22,14 +23,13 @@ export default function Providers({ children }: { children: React.ReactNode }) {
             registerPushSubscription(user.id).catch(() => {});
           }, 1500);
         }
-      } catch {
-        /* offline / auth unavailable */
-      }
+      } catch { /* offline */ }
     })();
   }, []);
 
   return (
     <ErrorBoundary>
+      <OfflineBanner />
       <SplashScreen />
       {children}
       <LiveAlerts />
