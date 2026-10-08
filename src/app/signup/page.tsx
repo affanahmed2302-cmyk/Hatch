@@ -3,6 +3,7 @@ import { useState, useEffect } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { supabase, isAllowedCollegeEmail, ensureProfile, collegePodFromEmail, extractDomain } from "@/lib/supabase";
+import { signInWithGoogle } from "@/lib/googleAuth";
 
 export default function SignupPage() {
   const [email, setEmail] = useState("");
@@ -11,6 +12,7 @@ export default function SignupPage() {
   const [err, setErr] = useState("");
   const [msg, setMsg] = useState("");
   const [loading, setLoading] = useState(false);
+  const [gLoading, setGLoading] = useState(false);
   const [refCode, setRefCode] = useState("");
   const router = useRouter();
 
@@ -54,7 +56,6 @@ export default function SignupPage() {
       }
 
       setMsg("Account created — set a photo on Profile when ready");
-      // Skip long OTP + terms maze → home (or login if email confirm required)
       if (data.session) router.replace("/home");
       else router.replace("/login");
     } catch (e: any) {
@@ -69,6 +70,21 @@ export default function SignupPage() {
       <h1 className="h1" style={{ marginBottom: 6 }}>Join in 30 seconds</h1>
       <p className="muted" style={{ fontSize: 13, marginBottom: 16 }}>College email + password. Photo later on Profile.</p>
       {err && <div className="fail" style={{ marginBottom: 10 }}>{err}</div>}
+      <button
+        type="button"
+        className="btn"
+        style={{ width: "100%", marginBottom: 12, background: "linear-gradient(135deg,#fff,#e2e8f0)", color: "#0f172a" }}
+        disabled={gLoading}
+        onClick={async () => {
+          setErr("");
+          setGLoading(true);
+          const res = await signInWithGoogle();
+          if (!res.ok) { setErr(res.error || "Google unavailable — enable in Supabase Auth"); setGLoading(false); }
+        }}
+      >
+        {gLoading ? "Redirecting…" : "Continue with Google"}
+      </button>
+      <p className="muted" style={{ fontSize: 12, marginBottom: 12, textAlign: "center" }}>College Google preferred · or email below</p>
       {msg && <div className="ok" style={{ marginBottom: 10 }}>{msg}</div>}
       <div className="stack">
         <input placeholder="Your name" value={name} onChange={(e) => setName(e.target.value)} autoComplete="name" />
