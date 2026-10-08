@@ -7,6 +7,7 @@ import { shareInvite } from "@/lib/invite";
 import Nav from "@/components/Nav";
 
 const CORE = [
+  { href: "/hostel", title: "Hatch Hostel", blurb: "Your hostel life, sorted — needs, market, tips" },
   { href: "/sparks", title: "Campus Sparks", blurb: "Dating prefs · same Hatch profile" },
   { href: "/teams", title: "Teams", blurb: "Hackathon & project teammates" },
   { href: "/clubs", title: "Clubs", blurb: "Boards, notices, events" },
