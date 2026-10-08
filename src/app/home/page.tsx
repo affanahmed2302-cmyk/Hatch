@@ -10,6 +10,7 @@ import { isMidnightBlackout, blackoutCountdown } from "@/lib/legendary";
 import { ensureNotifyPermission } from "@/lib/notify";
 import Nav from "@/components/Nav";
 import { shareInvite } from "@/lib/invite";
+import { replyToPulse, fetchPulseReplies } from "@/lib/pulse";
 
 const PLACES = ["Library", "Canteen", "Nescafe", "Quad", "Main gate"];
 const PLACE_EMOJI: Record<string, string> = { Library: "📚", Canteen: "🍽️", Nescafe: "☕", Quad: "🌳", "Main gate": "🚪" };
@@ -43,6 +44,9 @@ export default function HomePage() {
   const [cd, setCd] = useState("");
   const [needsPhoto, setNeedsPhoto] = useState(false);
   const [inviteMsg, setInviteMsg] = useState("");
+  const [replyOpen, setReplyOpen] = useState<string | null>(null);
+  const [replyText, setReplyText] = useState("");
+  const [replies, setReplies] = useState<Record<string, any[]>>({});
   const router = useRouter();
 
   async function refresh(_uid: string) {
@@ -121,6 +125,25 @@ export default function HomePage() {
     if (r.ok && r.method === "clipboard") setInviteMsg("Invite link copied — send to classmates");
     else if (r.ok) setInviteMsg("Share sheet opened");
     else setInviteMsg("Copy: hatch-primeora.vercel.app/signup");
+  }
+
+  async function openReplies(postId: string) {
+    if (replyOpen === postId) { setReplyOpen(null); return; }
+    setReplyOpen(postId);
+    setReplyText("");
+    const list = await fetchPulseReplies(postId);
+    setReplies((prev) => ({ ...prev, [postId]: list }));
+  }
+
+  async function sendReply(postId: string, authorId?: string) {
+    if (!myId || !replyText.trim()) return;
+    const res = await replyToPulse(postId, myId, replyText, authorId);
+    if (!res.ok) { setErr(res.error || "Reply failed"); return; }
+    setReplyText("");
+    setMsg("Reply sent");
+    const list = await fetchPulseReplies(postId);
+    setReplies((prev) => ({ ...prev, [postId]: list }));
+    haptic(8);
   }
 
   if (loading) {
@@ -224,7 +247,7 @@ export default function HomePage() {
           <div className="row" style={{ justifyContent: "space-between", marginBottom: 8 }}>
             <div>
               <div style={{ fontWeight: 800, fontSize: 17 }}>⚡ Campus Pulse</div>
-              <p className="muted" style={{ fontSize: 11 }}>··· delete yours · double-tap → profile</p>
+              <p className="muted" style={{ fontSize: 11 }}>Reply · ··· delete · double-tap profile</p>
             </div>
             <span className="badge">{pulseList.length} live</span>
           </div>
@@ -240,6 +263,7 @@ export default function HomePage() {
               <button className="btn btn-sm" onClick={publishPulse} disabled={!pulseText.trim()}>Drop pulse</button>
             </div>
           </div>
+
           {pulseList.slice(0, 10).map((p: any, i: number) => (
             <div key={p.id} onDoubleClick={() => openPulseAuthor(p.author_id)} title="Double-tap opens profile" style={{
               marginBottom: 10, padding: "12px 14px", borderRadius: 16, background: "rgba(0,0,0,0.28)",
@@ -263,9 +287,27 @@ export default function HomePage() {
                   )}
                 </div>
               )}
-              <div className="row" style={{ marginTop: 8 }}>
+              <div className="row" style={{ marginTop: 8, gap: 10, flexWrap: "wrap" }}>
                 <span className="muted" style={{ fontSize: 11 }}>{p.is_anonymous !== false ? "Anonymous" : "Student"} · {timeAgo(p.created_at)}</span>
+                <button type="button" className="btn-ghost btn-sm" style={{ fontSize: 11 }} onClick={(e) => { e.stopPropagation(); openReplies(p.id); }}>
+                  {replyOpen === p.id ? "Hide" : "Reply"}
+                </button>
               </div>
+              {replyOpen === p.id && (
+                <div style={{ marginTop: 10 }} onClick={(e) => e.stopPropagation()}>
+                  {(replies[p.id] || []).map((r: any) => (
+                    <div key={r.id} style={{ padding: "8px 10px", marginBottom: 6, borderRadius: 10, background: "rgba(255,255,255,0.04)", fontSize: 13 }}>
+                      <span style={{ fontWeight: 700, fontSize: 11, opacity: 0.8 }}>{displayName(r.profile || {})}</span>
+                      <p style={{ marginTop: 2 }}>{r.content}</p>
+                    </div>
+                  ))}
+                  <div className="row" style={{ gap: 8, marginTop: 6 }}>
+                    <input value={replyText} onChange={(e) => setReplyText(e.target.value)} placeholder="Write a reply…" maxLength={200} style={{ flex: 1 }}
+                      onKeyDown={(e) => e.key === "Enter" && sendReply(p.id, p.author_id)} />
+                    <button type="button" className="btn btn-sm" onClick={() => sendReply(p.id, p.author_id)} disabled={!replyText.trim()}>Send</button>
+                  </div>
+                </div>
+              )}
             </div>
           ))}
           {!pulseList.length && (
