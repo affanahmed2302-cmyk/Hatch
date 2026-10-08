@@ -9,6 +9,7 @@ import { fetchFeedEvents } from "@/lib/clubCore";
 import { isMidnightBlackout, blackoutCountdown } from "@/lib/legendary";
 import { ensureNotifyPermission } from "@/lib/notify";
 import Nav from "@/components/Nav";
+import { shareInvite } from "@/lib/invite";
 
 const PLACES = ["Library", "Canteen", "Nescafe", "Quad", "Main gate"];
 const PLACE_EMOJI: Record<string, string> = { Library: "📚", Canteen: "🍽️", Nescafe: "☕", Quad: "🌳", "Main gate": "🚪" };
@@ -41,6 +42,7 @@ export default function HomePage() {
   const [blackout, setBlackout] = useState(false);
   const [cd, setCd] = useState("");
   const [needsPhoto, setNeedsPhoto] = useState(false);
+  const [inviteMsg, setInviteMsg] = useState("");
   const router = useRouter();
 
   async function refresh(_uid: string) {
@@ -114,6 +116,13 @@ export default function HomePage() {
     router.push("/u/" + authorId);
   }
 
+  async function doInvite() {
+    const r = await shareInvite();
+    if (r.ok && r.method === "clipboard") setInviteMsg("Invite link copied — send to classmates");
+    else if (r.ok) setInviteMsg("Share sheet opened");
+    else setInviteMsg("Copy: hatch-primeora.vercel.app/signup");
+  }
+
   if (loading) {
     return (
       <div className="shell" style={{ display: "flex", alignItems: "center", justifyContent: "center" }}>
@@ -161,6 +170,26 @@ export default function HomePage() {
           <Link href="/inbox" className="quick-tile cyan"><span className="qt-ico">◇</span><div className="qt-title">Messages</div><div className="qt-sub">DMs</div></Link>
           <Link href="/clubs" className="quick-tile emerald"><span className="qt-ico">✦</span><div className="qt-title">Clubs</div><div className="qt-sub">Events</div></Link>
         </div>
+
+        <div className="row" style={{ gap: 8, marginBottom: 12 }}>
+          <Link href="/sparks" className="card" style={{
+            flex: 1, textDecoration: "none", color: "inherit", marginBottom: 0,
+            border: "1px solid rgba(236,72,153,0.35)",
+            background: "linear-gradient(160deg,rgba(236,72,153,0.14),rgba(22,22,32,0.85))",
+          }}>
+            <div style={{ fontWeight: 800, fontSize: 14 }}>✨ Sparks</div>
+            <p className="muted" style={{ fontSize: 11, marginTop: 2 }}>Campus dating · optional</p>
+          </Link>
+          <button type="button" className="card" onClick={doInvite} style={{
+            flex: 1, textAlign: "left", marginBottom: 0, cursor: "pointer",
+            border: "1px solid rgba(34,211,238,0.3)",
+            background: "linear-gradient(160deg,rgba(34,211,238,0.12),rgba(22,22,32,0.85))",
+          }}>
+            <div style={{ fontWeight: 800, fontSize: 14 }}>↗ Invite</div>
+            <p className="muted" style={{ fontSize: 11, marginTop: 2 }}>Share with classmates</p>
+          </button>
+        </div>
+        {inviteMsg && <div className="ok" style={{ marginBottom: 10 }}>{inviteMsg}</div>}
 
         <div className="card" style={{ marginBottom: 12, border: "1px solid rgba(52,211,153,0.4)", background: "linear-gradient(160deg,rgba(16,185,129,0.14),rgba(6,78,59,0.18))" }}>
           <div style={{ fontWeight: 800, fontSize: 16 }}>🟢 I'm Free</div>
@@ -211,13 +240,11 @@ export default function HomePage() {
               <button className="btn btn-sm" onClick={publishPulse} disabled={!pulseText.trim()}>Drop pulse</button>
             </div>
           </div>
-
           {pulseList.slice(0, 10).map((p: any, i: number) => (
             <div key={p.id} onDoubleClick={() => openPulseAuthor(p.author_id)} title="Double-tap opens profile" style={{
               marginBottom: 10, padding: "12px 14px", borderRadius: 16, background: "rgba(0,0,0,0.28)",
               border: "1px solid rgba(255,255,255,0.08)",
-              borderLeft: `3px solid ${["#a855f7", "#ec4899", "#22d3ee", "#fbbf24"][i % 4]}`,
-              cursor: "pointer",
+              borderLeft: `3px solid ${["#a855f7", "#ec4899", "#22d3ee", "#fbbf24"][i % 4]}`, cursor: "pointer",
             }}>
               <div className="row" style={{ justifyContent: "space-between", alignItems: "flex-start", gap: 8 }}>
                 <p style={{ fontSize: 14, lineHeight: 1.45, fontWeight: 500, flex: 1 }}>{p.content}</p>
