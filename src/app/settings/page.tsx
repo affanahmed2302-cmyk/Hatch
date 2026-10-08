@@ -8,6 +8,10 @@ import {
 } from "@/lib/chatLock";
 import { ensureInviteCode, trackEvent } from "@/lib/safety";
 import Nav from "@/components/Nav";
+import { checkForAppUpdate, APP_VERSION } from "@/lib/appVersion";
+import { getPeakHour, setPeakHour } from "@/lib/dailyNudge";
+import { ensureNotifyPermission } from "@/lib/notify";
+import { registerPushSubscription } from "@/lib/pushClient";
 
 export default function SettingsPage() {
   const [lockOn, setLockOn] = useState(false);
@@ -17,6 +21,10 @@ export default function SettingsPage() {
   const [showDisable, setShowDisable] = useState(false);
   const [invite, setInvite] = useState("");
   const [msg, setMsg] = useState("");
+  const [phone, setPhone] = useState("");
+  const [peak, setPeak] = useState<16 | 18>(18);
+  const [updateMsg, setUpdateMsg] = useState("");
+  const [pushMsg, setPushMsg] = useState("");
   const [err, setErr] = useState("");
   const [userId, setUserId] = useState<string | null>(null);
   const [email, setEmail] = useState("");
@@ -31,10 +39,12 @@ export default function SettingsPage() {
       setEmail(user.email || "");
       setLockOn(hasChatLock());
       setInvite(await ensureInviteCode(user.id));
-      const { data } = await supabase.from("profiles").select("profile_mode").eq("id", user.id).maybeSingle();
+      const { data } = await supabase.from("profiles").select("phone, profile_mode").eq("id", user.id).maybeSingle();
+      if (data?.phone) setPhone(String(data.phone));
       if (data?.profile_mode === "professional" || data?.profile_mode === "social" || data?.profile_mode === "both") {
         setProfileMode(data.profile_mode);
       }
+      try { setPeak(getPeakHour() as 16 | 18); } catch {}
       trackEvent(user.id, "settings_open");
     })();
   }, [router]);
@@ -95,18 +105,14 @@ export default function SettingsPage() {
         {err && <div className="fail">{err}</div>}
 
         {isSuperAdmin(email) && (
-          <Link href="/pilot" className="card" style={{
-            textDecoration: "none", color: "#fff",
-            background: "linear-gradient(135deg,#7c3aed,#db2777)",
-            border: "none",
-          }}>
-            <div style={{ fontWeight: 900 }}>✈ CEO Pilot</div>
-            <p style={{ fontSize: 12, opacity: 0.9 }}>Full admin control</p>
+          <Link href="/pilot" className="card" style={{ textDecoration: "none", color: "inherit", border: "1px solid rgba(167,139,250,0.4)" }}>
+            <div style={{ fontWeight: 800 }}>Pilot console</div>
+            <p className="muted" style={{ fontSize: 12 }}>Super-admin controls</p>
           </Link>
         )}
 
         <div className="card stack">
-          <div className="h2">How others see you</div>
+          <div className="h2">Profile mode</div>
           <p className="muted" style={{ fontSize: 12 }}>
             Professional = skills & career · Social = vibe & bio · Both = balanced
           </p>
@@ -130,17 +136,17 @@ export default function SettingsPage() {
 
         <Link href="/explore" className="card" style={{ textDecoration: "none", color: "inherit" }}>
           <div style={{ fontWeight: 700 }}>Explore</div>
-          <p className="muted" style={{ fontSize: 12 }}>Teams, clubs, midnight, tools</p>
+          <p className="muted" style={{ fontSize: 12 }}>Teams, clubs, tools</p>
         </Link>
 
         <Link href="/sparks" className="card" style={{ textDecoration: "none", color: "inherit" }}>
           <div style={{ fontWeight: 700 }}>Campus Sparks</div>
-          <p className="muted" style={{ fontSize: 12 }}>Dating · secondary · free at launch</p>
+          <p className="muted" style={{ fontSize: 12 }}>Dating · optional</p>
         </Link>
 
         <Link href="/clubs" className="card" style={{ textDecoration: "none", color: "inherit" }}>
           <div style={{ fontWeight: 700 }}>Clubs</div>
-          <p className="muted" style={{ fontSize: 12 }}>Club cores & events · growth focus</p>
+          <p className="muted" style={{ fontSize: 12 }}>Club cores & events</p>
         </Link>
 
         <div className="card stack">
@@ -149,6 +155,69 @@ export default function SettingsPage() {
             {invite ? `${typeof window !== "undefined" ? window.location.origin : ""}/signup?ref=${invite}` : "…"}
           </p>
           <button className="btn btn-sm" onClick={copyInvite}>Copy link</button>
+        </div>
+
+        <div className="card stack">
+          <div className="h2">Notifications</div>
+          <p className="muted" style={{ fontSize: 12 }}>
+            Enable browser push for replies, calls, and a daily campus nudge at peak time.
+            Phone is saved for future SMS (needs SMS provider later).
+          </p>
+          <input
+            type="tel"
+            placeholder="Phone (optional, 10 digits)"
+            value={phone}
+            onChange={(e) => setPhone(e.target.value.replace(/\D/g, "").slice(0, 10))}
+            maxLength={10}
+          />
+          <button
+            className="btn-ghost btn-sm"
+            type="button"
+            onClick={async () => {
+              if (!userId) return;
+              await supabase.from("profiles").update({ phone: phone || null }).eq("id", userId);
+              setMsg("Phone saved");
+            }}
+          >
+            Save phone
+          </button>
+          <p className="muted" style={{ fontSize: 12 }}>Daily peak nudge time</p>
+          <div className="row" style={{ gap: 8 }}>
+            <button type="button" className={peak === 16 ? "chip on" : "chip"} onClick={() => { setPeak(16); setPeakHour(16); }}>4 PM</button>
+            <button type="button" className={peak === 18 ? "chip on" : "chip"} onClick={() => { setPeak(18); setPeakHour(18); }}>6 PM</button>
+          </div>
+          <button
+            className="btn btn-sm"
+            type="button"
+            onClick={async () => {
+              if (!userId) return;
+              const p = await ensureNotifyPermission();
+              if (p !== "granted") { setPushMsg("Allow notifications in browser settings"); return; }
+              const ok = await registerPushSubscription(userId);
+              setPushMsg(ok ? "Push on — you'll get replies & calls" : "Push setup failed — try Install app first");
+            }}
+          >
+            Enable push notifications
+          </button>
+          {pushMsg && <p className="muted" style={{ fontSize: 12 }}>{pushMsg}</p>}
+        </div>
+
+        <div className="card stack">
+          <div className="h2">App update</div>
+          <p className="muted" style={{ fontSize: 12 }}>Version {APP_VERSION} · clears cache & reloads latest (no reinstall)</p>
+          <button
+            className="btn btn-sm"
+            type="button"
+            onClick={async () => {
+              setUpdateMsg("Checking…");
+              const r = await checkForAppUpdate();
+              setUpdateMsg(r.message);
+              if (r.updated) setTimeout(() => window.location.reload(), 600);
+            }}
+          >
+            Check for update
+          </button>
+          {updateMsg && <p className="muted" style={{ fontSize: 12 }}>{updateMsg}</p>}
         </div>
 
         <div className="card stack">
