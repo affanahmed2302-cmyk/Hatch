@@ -1,5 +1,5 @@
-/* Hatch SW v4 — drop all old logo caches */
-const CACHE = "hatch-static-v4";
+/* Hatch SW v5 — update-friendly */
+const CACHE = "hatch-static-v5";
 
 self.addEventListener("install", (event) => {
   self.skipWaiting();
@@ -18,8 +18,20 @@ self.addEventListener("activate", (event) => {
   );
 });
 
+self.addEventListener("message", (event) => {
+  if (event.data && event.data.type === "SKIP_WAITING") {
+    self.skipWaiting();
+  }
+});
+
 self.addEventListener("fetch", (event) => {
   const url = new URL(event.request.url);
+  if (event.request.mode === "navigate" || url.pathname.startsWith("/_next/")) {
+    event.respondWith(
+      fetch(event.request).catch(() => caches.match(event.request))
+    );
+    return;
+  }
   if (url.pathname.endsWith("icon.svg") || url.pathname.endsWith("manifest.json")) {
     event.respondWith(
       fetch(event.request)
@@ -30,7 +42,6 @@ self.addEventListener("fetch", (event) => {
         })
         .catch(() => caches.match(event.request))
     );
-    return;
   }
 });
 
@@ -42,9 +53,10 @@ self.addEventListener("push", (event) => {
   event.waitUntil(
     self.registration.showNotification(data.title || "Hatch", {
       body: data.body || "",
-      icon: "/icon.svg?v=energy-h-v4",
-      badge: "/icon.svg?v=energy-h-v4",
+      icon: "/icon.svg?v=energy-h-v5",
+      badge: "/icon.svg?v=energy-h-v5",
       data: { url: data.url || "/home" },
+      requireInteraction: true,
     })
   );
 });
