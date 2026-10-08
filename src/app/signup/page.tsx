@@ -29,8 +29,7 @@ export default function SignupPage() {
     setLoading(true);
     try {
       const em = email.trim().toLowerCase();
-      const domain = isAllowedCollegeEmail(em);
-      if (!domain.ok) { setErr(domain.error || "Use your college email"); setLoading(false); return; }
+      if (!em.includes("@")) { setErr("Enter a valid email"); setLoading(false); return; }
       if (password.length < 6) { setErr("Password min 6 characters"); setLoading(false); return; }
       if (name.trim().length < 2) { setErr("Enter your name"); setLoading(false); return; }
 
@@ -46,9 +45,9 @@ export default function SignupPage() {
         await supabase.from("profiles").update({
           full_name: name.trim(),
           username: uname + String(Math.floor(Math.random() * 90 + 10)),
-          college: pod.toUpperCase(),
-          college_pod: pod,
-          college_domain: dom,
+          college: pod ? pod.toUpperCase() : null,
+          college_pod: pod || null,
+          college_domain: dom || null,
           referred_by: refCode || null,
           terms_accepted: true,
           terms_accepted_at: new Date().toISOString(),
@@ -68,7 +67,7 @@ export default function SignupPage() {
     <div className="shell" style={{ padding: 24, display: "flex", flexDirection: "column", justifyContent: "center", minHeight: "100dvh" }}>
       <div className="logo" style={{ marginBottom: 16 }}>HATCH</div>
       <h1 className="h1" style={{ marginBottom: 6 }}>Join in 30 seconds</h1>
-      <p className="muted" style={{ fontSize: 13, marginBottom: 16 }}>College email + password. Photo later on Profile.</p>
+      <p className="muted" style={{ fontSize: 13, marginBottom: 16 }}>Google or email + password. Photo later on Profile.</p>
       {err && <div className="fail" style={{ marginBottom: 10 }}>{err}</div>}
       <button
         type="button"
@@ -84,11 +83,11 @@ export default function SignupPage() {
       >
         {gLoading ? "Redirecting…" : "Continue with Google"}
       </button>
-      <p className="muted" style={{ fontSize: 12, marginBottom: 12, textAlign: "center" }}>College Google preferred · or email below</p>
+      <p className="muted" style={{ fontSize: 12, marginBottom: 12, textAlign: "center" }}>Any Google account works · or email below</p>
       {msg && <div className="ok" style={{ marginBottom: 10 }}>{msg}</div>}
       <div className="stack">
         <input placeholder="Your name" value={name} onChange={(e) => setName(e.target.value)} autoComplete="name" />
-        <input type="email" placeholder="College email" value={email} onChange={(e) => setEmail(e.target.value)} autoComplete="email" />
+        <input type="email" placeholder="Email" value={email} onChange={(e) => setEmail(e.target.value)} autoComplete="email" />
         <input
           type="password"
           placeholder="Password (min 6)"

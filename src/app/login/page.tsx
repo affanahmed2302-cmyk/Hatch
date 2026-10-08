@@ -99,7 +99,7 @@ export default function LoginPage() {
         {gLoading ? "Redirecting…" : "Continue with Google"}
       </button>
       <p className="muted" style={{ fontSize: 12, marginBottom: 14, textAlign: "center" }}>
-        Prefer college Google (.ac.in / .edu) · proves real mailbox
+        Any Google account works (Gmail, college, etc.)
       </p>
       <p className="muted" style={{ fontSize: 11, marginBottom: 10, textAlign: "center" }}>or email</p>
       <div className="stack">

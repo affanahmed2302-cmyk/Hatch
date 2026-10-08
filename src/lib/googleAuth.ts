@@ -1,4 +1,4 @@
-import { supabase, isAllowedCollegeEmail, isSuperAdmin, ensureProfile } from './supabase'
+import { supabase, ensureProfile } from './supabase'
 import { collegePodFromEmail, extractDomain } from './college'
 
 /** Start Google OAuth — enable Google provider in Supabase Auth settings */
@@ -18,7 +18,7 @@ export async function signInWithGoogle(redirectPath = '/auth/callback') {
   return { ok: true as const, url: data.url, error: null }
 }
 
-/** After OAuth: enforce college email (super-admin Gmail allowed) */
+/** After OAuth: any Google account is allowed (Gmail, college, etc.) */
 export async function finalizeOAuthSession(): Promise<{
   ok: boolean
   error?: string
@@ -40,31 +40,24 @@ export async function finalizeOAuthSession(): Promise<{
   }
 
   const email = user.email.toLowerCase()
-  const allowed = isAllowedCollegeEmail(email)
-  if (!allowed.ok && !isSuperAdmin(email)) {
-    await supabase.auth.signOut()
-    return {
-      ok: false,
-      error:
-        'Use a college Google account (.ac.in / .edu). Personal Gmail is only allowed for the founder admin.',
-    }
-  }
 
   await ensureProfile(user.id, email)
-  const pod = collegePodFromEmail(email)
-  const domain = extractDomain(email)
+
+  // Optional: tag college if institutional domain; personal Gmail still OK
   try {
+    const pod = collegePodFromEmail(email)
+    const domain = extractDomain(email)
     await supabase
       .from('profiles')
       .update({
-        college: pod.toUpperCase(),
-        college_pod: pod,
-        college_domain: domain,
+        college: pod ? pod.toUpperCase() : null,
+        college_pod: pod || null,
+        college_domain: domain || null,
         updated_at: new Date().toISOString(),
       })
       .eq('id', user.id)
   } catch {
-    /* optional */
+    /* optional columns */
   }
 
   return { ok: true, next: '/home' }
