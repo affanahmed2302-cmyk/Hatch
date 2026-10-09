@@ -1,1 +1,93 @@
-PLACEHOLDER
+"use client";
+import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
+import Link from "next/link";
+import { supabase, isSuperAdmin } from "@/lib/supabase";
+import { shareInvite } from "@/lib/invite";
+import { getFeatureFlags } from "@/lib/features";
+import Nav from "@/components/Nav";
+
+const CORE_BASE = [
+  { href: "/schedule", title: "Schedule Planner", blurb: "Classes · goals · 10-min reminders · Google Calendar", flag: null as string | null },
+  { href: "/hostel", title: "Hatch Hostel", blurb: "Your hostel life, sorted — needs, market, tips", flag: null },
+  { href: "/sparks", title: "Campus Sparks", blurb: "Dating prefs · same Hatch profile", flag: "feature_sparks" },
+  { href: "/teams", title: "Teams", blurb: "Hackathon & project teammates", flag: null },
+  { href: "/clubs", title: "Clubs", blurb: "Boards, notices, events", flag: null },
+  { href: "/challenges", title: "Challenges", blurb: "Daily campus missions", flag: null },
+  { href: "/leaderboard", title: "Leaderboard", blurb: "Rep ranks", flag: null },
+  { href: "/premium", title: "Premium", blurb: "Unlock extra perks", flag: "feature_premium" },
+];
+
+const EXTRA = [
+  { href: "/radar", title: "Radar", blurb: "Nearby intents" },
+  { href: "/ghost", title: "Ghost Teammate", blurb: "Squad suggestions" },
+  { href: "/legends", title: "Legends", blurb: "Invite-only circle" },
+  { href: "/install", title: "Install app", blurb: "Add to home screen" },
+];
+
+export default function ExplorePage() {
+  const [email, setEmail] = useState("");
+  const [loading, setLoading] = useState(true);
+  const [shareMsg, setShareMsg] = useState("");
+  const [flags, setFlags] = useState<Record<string, boolean>>({});
+  const router = useRouter();
+
+  useEffect(() => {
+    (async () => {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) { router.push("/login"); return; }
+      setEmail(user.email || "");
+      setFlags(await getFeatureFlags());
+      setLoading(false);
+    })();
+  }, [router]);
+
+  async function invite() {
+    const r = await shareInvite();
+    if (r.ok && r.method === "clipboard") setShareMsg("Invite link copied");
+    else if (r.ok) setShareMsg("Share sheet opened");
+    else if ("url" in r) setShareMsg(r.url);
+  }
+
+  if (loading) {
+    return (
+      <div className="shell" style={{ display: "flex", alignItems: "center", justifyContent: "center" }}>
+        <span className="muted">…</span>
+      </div>
+    );
+  }
+
+  const core = CORE_BASE.filter((x) => !x.flag || flags[x.flag]);
+
+  return (
+    <div className="shell">
+      <div className="topbar">
+        <Link href="/home" className="btn-ghost btn-sm">←</Link>
+        <div className="logo" style={{ fontSize: 16 }}>Explore</div>
+      </div>
+      <div className="page">
+        <p className="muted" style={{ fontSize: 13, marginBottom: 14 }}>Tools beyond Home — keep it simple</p>
+        <button type="button" className="btn" style={{ width: "100%", marginBottom: 16 }} onClick={invite}>Invite a classmate</button>
+        {shareMsg && <div className="ok" style={{ marginBottom: 12 }}>{shareMsg}</div>}
+        <div style={{ fontWeight: 700, fontSize: 12, marginBottom: 8, opacity: 0.7 }}>MAIN</div>
+        {core.map((x) => (
+          <Link key={x.href} href={x.href} className="card" style={{ display: "block", marginBottom: 10, textDecoration: "none", color: "inherit" }}>
+            <div style={{ fontWeight: 800 }}>{x.title}</div>
+            <p className="muted" style={{ fontSize: 12, marginTop: 2 }}>{x.blurb}</p>
+          </Link>
+        ))}
+        <div style={{ fontWeight: 700, fontSize: 12, margin: "16px 0 8px", opacity: 0.7 }}>MORE</div>
+        {EXTRA.map((x) => (
+          <Link key={x.href} href={x.href} className="card" style={{ display: "block", marginBottom: 10, textDecoration: "none", color: "inherit", opacity: 0.92 }}>
+            <div style={{ fontWeight: 700, fontSize: 14 }}>{x.title}</div>
+            <p className="muted" style={{ fontSize: 12, marginTop: 2 }}>{x.blurb}</p>
+          </Link>
+        ))}
+        {isSuperAdmin(email) && (
+          <Link href="/pilot" className="btn-ghost" style={{ display: "block", textAlign: "center", marginTop: 12 }}>Pilot console</Link>
+        )}
+      </div>
+      <Nav />
+    </div>
+  );
+}
