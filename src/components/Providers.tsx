@@ -7,6 +7,7 @@ import PilotButton from "./PilotButton";
 import SplashScreen from "./SplashScreen";
 import ErrorBoundary from "./ErrorBoundary";
 import OfflineBanner from "./OfflineBanner";
+import ThemePreview from "./ThemePreview";
 import { supabase } from "@/lib/supabase";
 import { registerPushSubscription } from "@/lib/pushClient";
 import { maybeDailyPeakNudge } from "@/lib/dailyNudge";
@@ -46,6 +47,7 @@ export default function Providers({ children }: { children: React.ReactNode }) {
 
   return (
     <ErrorBoundary>
+      <ThemePreview />
       <OfflineBanner />
       <SplashScreen />
       {children}
