@@ -12,10 +12,10 @@ export type FeatureKey =
   | 'feature_club_events'
   | 'maintenance_mode'
 
-/** Defaults when app_settings row missing */
+/** Defaults when app_settings row missing — Sparks OFF for presentation */
 const DEFAULTS: Record<FeatureKey, boolean> = {
-  feature_sparks: true,
-  dating_app_active: true,
+  feature_sparks: false,
+  dating_app_active: false,
   feature_confessions: true,
   feature_club_portal: true,
   feature_bounties: true,
