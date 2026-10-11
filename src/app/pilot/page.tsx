@@ -65,7 +65,6 @@ export default function PilotPage() {
     if (!res.ok) setMsg(res.error || "Failed — run hatch_killswitches.sql if app_settings missing");
     else {
       setMsg(`${key} → ${next ? "ON" : "OFF"}`);
-      // optimistic
       setFlags((prev) => {
         const copy = { ...prev, [key]: next };
         if (key === "feature_sparks" || key === "dating_app_active") {
@@ -115,6 +114,7 @@ export default function PilotPage() {
         <div className="card" style={{ marginBottom: 12, border: "1px solid rgba(52,211,153,0.4)" }}>
           <div style={{ fontWeight: 800 }}>Launch controls</div>
           <div className="row" style={{ gap: 8, marginTop: 10, flexWrap: "wrap" }}>
+            <Link href="/theme-lab" className="btn btn-sm">Theme Lab</Link>
             <Link href="/pilot/clubs" className="btn btn-sm">Clubs + Captains</Link>
             <Link href="/pilot/commerce" className="btn btn-sm">Coupons + payments</Link>
           </div>
