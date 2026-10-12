@@ -157,7 +157,7 @@ export default function LoungePage() {
       }
     }
 
-    if (!(await rateLimit("lounge:" + myId, 20, 60000))) {
+    if (!rateLimit("lounge:" + myId, 20, 60000)) {
       setErr("Slow down — too many messages");
       return;
     }
