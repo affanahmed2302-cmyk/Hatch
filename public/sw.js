@@ -1,11 +1,11 @@
-/* Hatch SW v6 — clean boot, update-friendly */
-const CACHE = "hatch-static-v6";
+/* Hatch SW v7 — network-first, never poison /_next after broken deploys */
+const CACHE = "hatch-static-v7";
 
 self.addEventListener("install", (event) => {
   self.skipWaiting();
   event.waitUntil(
     caches.open(CACHE).then((cache) =>
-      cache.addAll(["/", "/icon.svg", "/manifest.json"]).catch(() => {})
+      cache.addAll(["/icon.svg", "/manifest.json"]).catch(() => {})
     )
   );
 });
@@ -22,17 +22,34 @@ self.addEventListener("message", (event) => {
   if (event.data && event.data.type === "SKIP_WAITING") {
     self.skipWaiting();
   }
+  if (event.data && event.data.type === "CLEAR_ALL") {
+    event.waitUntil(
+      caches.keys().then((keys) => Promise.all(keys.map((k) => caches.delete(k))))
+    );
+  }
 });
 
 self.addEventListener("fetch", (event) => {
   const url = new URL(event.request.url);
-  if (event.request.mode === "navigate" || url.pathname.startsWith("/_next/")) {
+
+  // Never cache Next.js chunks / RSC — always network. Stale chunks cause white-screen crashes.
+  if (
+    event.request.mode === "navigate" ||
+    url.pathname.startsWith("/_next/") ||
+    url.pathname.startsWith("/api/")
+  ) {
     event.respondWith(
-      fetch(event.request).catch(() => caches.match(event.request))
+      fetch(event.request).catch(() => caches.match("/").then((r) => r || Response.error()))
     );
     return;
   }
-  if (url.pathname.endsWith("icon.svg") || url.pathname.endsWith("manifest.json")) {
+
+  // Static assets only
+  if (
+    url.pathname.endsWith("icon.svg") ||
+    url.pathname.endsWith("manifest.json") ||
+    url.pathname.endsWith("sw.js")
+  ) {
     event.respondWith(
       fetch(event.request)
         .then((res) => {
@@ -53,8 +70,8 @@ self.addEventListener("push", (event) => {
   event.waitUntil(
     self.registration.showNotification(data.title || "Hatch", {
       body: data.body || "",
-      icon: "/icon.svg?v=energy-h-v6",
-      badge: "/icon.svg?v=energy-h-v6",
+      icon: "/icon.svg?v=energy-h-v7",
+      badge: "/icon.svg?v=energy-h-v7",
       data: { url: data.url || "/home" },
       requireInteraction: true,
     })
