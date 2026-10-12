@@ -1,5 +1,5 @@
-export const APP_VERSION = '5.13.0'
-export const APP_BUILD = '2026-10-08'
+export const APP_VERSION = '5.14.0'
+export const APP_BUILD = '2026-10-12'
 
 export async function checkForAppUpdate(): Promise<{
   updated: boolean
