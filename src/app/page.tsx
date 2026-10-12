@@ -1,6 +1,6 @@
 "use client";
 import Link from "next/link";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
 
@@ -8,16 +8,34 @@ const PILLARS = [
   { t: "Find people", d: "Skills, year, department — connect in one tap" },
   { t: "I'm Free", d: "Show you're free on campus — get Pinged" },
   { t: "Campus chat", d: "DMs + Lounge channels for placements & teams" },
-  { t: "Sparks", d: "Optional dating layer — same profile, extra prefs" },
+  { t: "Clubs & schedule", d: "Events, planner, hostel — one place" },
 ];
 
 export default function Landing() {
   const router = useRouter();
+  const [ready, setReady] = useState(false);
+
   useEffect(() => {
-    supabase.auth.getSession().then(({ data }) => {
-      if (data.session) router.replace("/home");
-    });
+    let cancelled = false;
+    (async () => {
+      try {
+        const { data } = await supabase.auth.getSession();
+        if (cancelled) return;
+        if (data.session) {
+          router.replace("/home");
+          return;
+        }
+      } catch {
+        /* offline / no session */
+      }
+      if (!cancelled) setReady(true);
+    })();
+    return () => { cancelled = true; };
   }, [router]);
+
+  if (!ready) {
+    return <div className="shell" style={{ minHeight: "100dvh", background: "transparent" }} />;
+  }
 
   return (
     <div className="shell" style={{ display: "flex", flexDirection: "column", justifyContent: "center", padding: 28, paddingBottom: 48, minHeight: "100dvh" }}>
@@ -31,7 +49,7 @@ export default function Landing() {
           <span style={{ background: "linear-gradient(135deg,#ec4899,#a855f7,#22d3ee)", WebkitBackgroundClip: "text", backgroundClip: "text", WebkitTextFillColor: "transparent" }}>One network.</span>
         </h1>
         <p className="muted" style={{ fontSize: 15, lineHeight: 1.5, marginBottom: 22, maxWidth: 340 }}>
-          Find teammates, chat, go free on campus, and optionally Sparks — built for BMSCE students.
+          Find teammates, chat, go free on campus — built for BMSCE students.
         </p>
         <div className="stack" style={{ marginBottom: 20 }}>
           <Link href="/signup" className="btn" style={{ textAlign: "center" }}>Join with college email</Link>

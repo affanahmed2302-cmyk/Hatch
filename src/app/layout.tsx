@@ -34,8 +34,8 @@ export const metadata: Metadata = {
     "mobile-web-app-capable": "yes",
   },
   icons: {
-    icon: [{ url: "/icon.svg?v=energy-h-v5", type: "image/svg+xml" }],
-    apple: [{ url: "/icon.svg?v=energy-h-v5" }],
+    icon: [{ url: "/icon.svg?v=energy-h-v6", type: "image/svg+xml" }],
+    apple: [{ url: "/icon.svg?v=energy-h-v6" }],
   },
 };
 
@@ -55,14 +55,23 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="en">
       <head>
-        <link rel="apple-touch-icon" href="/icon.svg?v=energy-h-v5" />
-        <link rel="icon" href="/icon.svg?v=energy-h-v5" type="image/svg+xml" />
+        <link rel="apple-touch-icon" href="/icon.svg?v=energy-h-v6" />
+        <link rel="icon" href="/icon.svg?v=energy-h-v6" type="image/svg+xml" />
         <meta name="apple-mobile-web-app-capable" content="yes" />
         <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
         <meta name="apple-mobile-web-app-title" content="Hatch" />
         <meta name="mobile-web-app-capable" content="yes" />
+        <style dangerouslySetInnerHTML={{ __html: `
+#hatch-boot{position:fixed;inset:0;z-index:99999;display:flex;flex-direction:column;align-items:center;justify-content:center;background:#07070c;color:#f4f4f8;font-family:-apple-system,BlinkMacSystemFont,"SF Pro Display","Segoe UI",Roboto,sans-serif}
+#hatch-boot .hatch-boot-mark{font-weight:900;font-size:clamp(40px,12vw,64px);letter-spacing:.08em;line-height:1;background:linear-gradient(135deg,#ec4899,#a855f7,#22d3ee,#fbbf24);-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent}
+#hatch-boot .hatch-boot-sub{margin-top:12px;font-size:11px;font-weight:600;letter-spacing:.16em;text-transform:uppercase;color:#6b6b80;opacity:.9}
+` }} />
       </head>
       <body>
+        <div id="hatch-boot" aria-hidden="true">
+          <div className="hatch-boot-mark">HATCH</div>
+          <div className="hatch-boot-sub">Campus network</div>
+        </div>
         <Providers>{children}</Providers>
       </body>
     </html>

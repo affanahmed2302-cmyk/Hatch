@@ -1,5 +1,5 @@
-/* Hatch SW v5 — update-friendly */
-const CACHE = "hatch-static-v5";
+/* Hatch SW v6 — clean boot, update-friendly */
+const CACHE = "hatch-static-v6";
 
 self.addEventListener("install", (event) => {
   self.skipWaiting();
@@ -53,8 +53,8 @@ self.addEventListener("push", (event) => {
   event.waitUntil(
     self.registration.showNotification(data.title || "Hatch", {
       body: data.body || "",
-      icon: "/icon.svg?v=energy-h-v5",
-      badge: "/icon.svg?v=energy-h-v5",
+      icon: "/icon.svg?v=energy-h-v6",
+      badge: "/icon.svg?v=energy-h-v6",
       data: { url: data.url || "/home" },
       requireInteraction: true,
     })

@@ -1,41 +1,50 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useEffect } from "react";
 import { playWordReveal, playOut } from "@/lib/splashSounds";
 
-const SESSION_KEY = "hatch_splash_v5";
+const SESSION_KEY = "hatch_splash_v6";
+const MIN_MS = 1400;
+const FADE_MS = 320;
 
-/** Fast HATCH intro — short, GPU-friendly, no laggy logo stage */
+/**
+ * Professional boot sequence:
+ * 1. HTML #hatch-boot is already visible before React (no blank / Loading flash)
+ * 2. Animate word once per session, then fade and remove
+ * 3. Revisit same session → hide boot instantly
+ */
 export default function SplashScreen() {
-  const [show, setShow] = useState(false);
-  const [phase, setPhase] = useState<"word" | "out">("word");
-
   useEffect(() => {
     if (typeof window === "undefined") return;
+    const boot = document.getElementById("hatch-boot");
+    if (!boot) return;
+
+    let seen = false;
     try {
-      if (sessionStorage.getItem(SESSION_KEY)) return;
+      seen = !!sessionStorage.getItem(SESSION_KEY);
     } catch {
       /* */
     }
 
-    // Defer paint + sound so first frame stays smooth
-    const start = requestAnimationFrame(() => {
-      setShow(true);
-      // Sound after gesture-safe tick (still may mute until user taps once on iOS)
-      try {
-        playWordReveal();
-      } catch {
-        /* */
-      }
-    });
+    if (seen) {
+      boot.remove();
+      return;
+    }
+
+    boot.classList.add("hatch-boot-animate");
+    try {
+      playWordReveal();
+    } catch {
+      /* */
+    }
 
     const tOut = window.setTimeout(() => {
-      setPhase("out");
+      boot.classList.add("hatch-boot-out");
       try {
         playOut();
       } catch {
         /* */
       }
-    }, 1100);
+    }, MIN_MS);
 
     const tHide = window.setTimeout(() => {
       try {
@@ -43,30 +52,14 @@ export default function SplashScreen() {
       } catch {
         /* */
       }
-      setShow(false);
-    }, 1450);
+      boot.remove();
+    }, MIN_MS + FADE_MS);
 
     return () => {
-      cancelAnimationFrame(start);
       clearTimeout(tOut);
       clearTimeout(tHide);
     };
   }, []);
 
-  if (!show) return null;
-
-  return (
-    <div
-      className={`hatch-splash ${phase === "out" ? "hatch-splash-out" : ""}`}
-      aria-hidden
-      style={{ willChange: "opacity" }}
-    >
-      <div className="hatch-splash-stage hatch-splash-stage-word is-active">
-        <div className="hatch-splash-wordline" style={{ willChange: "transform, opacity" }}>
-          <span className="hatch-splash-h">H</span>
-          <span className="hatch-splash-atch">atch</span>
-        </div>
-      </div>
-    </div>
-  );
+  return null;
 }

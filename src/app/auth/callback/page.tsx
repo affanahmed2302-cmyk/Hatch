@@ -21,14 +21,14 @@ export default function AuthCallbackPage() {
 
   return (
     <div className="shell" style={{ padding: 24, display: "flex", flexDirection: "column", justifyContent: "center", minHeight: "100dvh" }}>
-      <div className="logo" style={{ marginBottom: 16 }}>HATCH</div>
       {err ? (
         <>
+          <div className="logo" style={{ marginBottom: 16 }}>HATCH</div>
           <div className="fail" style={{ marginBottom: 12 }}>{err}</div>
           <Link href="/login" className="btn">Back to login</Link>
         </>
       ) : (
-        <p className="muted">Finishing Google sign-in…</p>
+        <div style={{ opacity: 0, height: 1 }} aria-hidden />
       )}
     </div>
   );
