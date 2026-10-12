@@ -32,18 +32,37 @@ function loadRazorpayScript(): Promise<boolean> {
   });
 }
 
+const DEFAULT_BULLETS: Record<ProductId, string[]> = {
+  sparks: [
+    "See who liked you",
+    "Unlimited likes",
+    "Campus-only matches",
+  ],
+  premium: [
+    "Priority discover",
+    "Extra profile boosts",
+    "Early access features",
+  ],
+  legends: [
+    "Founder circle",
+    "Exclusive events",
+    "Badge on profile",
+  ],
+};
+
 export default function Paywall({
   product,
-  userId,
+  userId: userIdProp,
   onUnlocked,
   bullets,
 }: {
   product: ProductId;
-  userId: string;
+  userId?: string;
   onUnlocked?: () => void;
-  bullets: string[];
+  bullets?: string[];
 }) {
   const p = PRODUCTS[product];
+  const [userId, setUserId] = useState(userIdProp || "");
   const [coupon, setCoupon] = useState("");
   const [discount, setDiscount] = useState(0);
   const [couponOk, setCouponOk] = useState("");
@@ -53,8 +72,17 @@ export default function Paywall({
   const [busy, setBusy] = useState(false);
   const [rzReady, setRzReady] = useState(false);
 
+  const list = bullets?.length ? bullets : DEFAULT_BULLETS[product] || [];
   const amount = priceAfterCoupon(p.amount, discount);
   const publicKey = process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID || "";
+
+  useEffect(() => {
+    if (userIdProp) { setUserId(userIdProp); return; }
+    (async () => {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user) setUserId(user.id);
+    })();
+  }, [userIdProp]);
 
   useEffect(() => {
     if (publicKey) loadRazorpayScript().then(setRzReady);
@@ -94,6 +122,7 @@ export default function Paywall({
   }
 
   async function payRazorpay() {
+    if (!userId) { setErr("Sign in required"); return; }
     setBusy(true); setErr(""); setMsg("");
     try {
       const orderRes = await fetch("/api/razorpay/create-order", {
@@ -170,6 +199,7 @@ export default function Paywall({
   }
 
   async function submitUpi() {
+    if (!userId) { setErr("Sign in required"); return; }
     if (amount === 0) {
       await redeemFreeCoupon();
       return;
@@ -196,7 +226,7 @@ export default function Paywall({
       <p className="muted" style={{ fontSize: 13 }}>{p.tagline}</p>
       <div style={{ fontWeight: 800, fontSize: 28 }}>{p.label}</div>
       <ul style={{ paddingLeft: 18, fontSize: 13, lineHeight: 1.6 }}>
-        {bullets.map((b) => <li key={b}>{b}</li>)}
+        {list.map((b) => <li key={b}>{b}</li>)}
       </ul>
 
       <div className="row" style={{ gap: 8 }}>
