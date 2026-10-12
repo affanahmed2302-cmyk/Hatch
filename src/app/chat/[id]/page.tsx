@@ -66,7 +66,7 @@ export default function ChatPage() {
     if (!myId) return;
     const body = (content ?? text).trim();
     if (!body) return;
-    if (!(await rateLimit("msg:" + myId, 40, 60000))) return;
+    if (!rateLimit("msg:" + myId, 40, 60000)) return;
     setText("");
     await supabase.from("messages").insert({ sender_id: myId, receiver_id: peerId, content: body });
     await bumpDaily(myId);

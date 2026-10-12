@@ -38,11 +38,27 @@ export function isRecentlyOnline(lastSeen?: string | null) {
   return Date.now() - new Date(lastSeen).getTime() < 3 * 60 * 1000
 }
 
-const _rl: Record<string, number> = {}
-export function rateLimit(key: string, ms = 2000): boolean {
+const _rl: Record<string, { t: number; c: number }> = {}
+/** Client rate limit. rateLimit(key) / rateLimit(key, ms) = 1 per window.
+ *  rateLimit(key, maxCount, windowMs) = maxCount actions per window. */
+export function rateLimit(key: string, a = 2000, b?: number): boolean {
   const now = Date.now()
-  if (_rl[key] && now - _rl[key] < ms) return false
-  _rl[key] = now
+  if (typeof b === "number") {
+    const max = a
+    const windowMs = b
+    const slot = _rl[key]
+    if (!slot || now - slot.t >= windowMs) {
+      _rl[key] = { t: now, c: 1 }
+      return true
+    }
+    if (slot.c >= max) return false
+    slot.c += 1
+    return true
+  }
+  const ms = a
+  const slot = _rl[key]
+  if (slot && now - slot.t < ms) return false
+  _rl[key] = { t: now, c: 1 }
   return true
 }
 
