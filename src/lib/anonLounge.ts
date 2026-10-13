@@ -19,7 +19,6 @@ export function checkAnonMessage(text: string): { ok: boolean; error?: string } 
       return { ok: false, error: 'Message blocked — no vulgar or abusive language in Anonymous Lounge' }
     }
   }
-  // No @handles / phone numbers that could dox
   if (/@\w{3,}/.test(t) && !t.includes('@campus')) {
     return { ok: false, error: 'Don’t share social handles here — stay anonymous' }
   }
@@ -62,7 +61,6 @@ export async function banFromAnon(userId: string, byId: string, reason: string) 
 export async function banFromApp(userId: string) {
   const { error } = await supabase.from('profiles').update({ app_banned: true }).eq('id', userId)
   if (error) return { ok: false as const, error: error.message }
-  // Also anon ban
   await supabase.from('anon_lounge_bans').upsert({ user_id: userId, reason: 'App ban' })
   return { ok: true as const }
 }
