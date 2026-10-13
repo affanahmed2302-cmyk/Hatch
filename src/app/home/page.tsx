@@ -14,10 +14,45 @@ import { replyToPulse, fetchPulseReplies } from "@/lib/pulse";
 import SparksEntry from "@/components/SparksEntry";
 import AppSkeleton from "@/components/AppSkeleton";
 
-const PLACES = ["Library", "Canteen", "Nescafe", "Quad", "Main gate"];
-const PLACE_EMOJI: Record<string, string> = { Library: "📚", Canteen: "🍽️", Nescafe: "☕", Quad: "🌳", "Main gate": "🚪" };
-const ACTIVITY_HINTS = ["Coffee + chill · join?", "Walk around campus", "Gym buddy for 30 min", "Food run · canteen", "Jam session / music", "Badminton / sports", "Movie plan after class", "Just free to talk"];
-const PULSE_CHIPS = ["🔥 Something wild just happened…", "☕ At Nescafe, good energy", "🎵 Song stuck in my head", "🏀 Anyone for a match?", "🌙 Night campus hits different", "😂 Random campus thought"];
+/** BMSCE campus spots — ordered for how students actually hang (study → food → chill → active → quiet) */
+const PLACES = [
+  "Library",
+  "Main Canteen",
+  "Cafeteria",
+  "Architecture Park",
+  "Ground",
+  "Sports Complex",
+  "Basement",
+  "Back Benches",
+];
+const PLACE_EMOJI: Record<string, string> = {
+  Library: "📚",
+  "Main Canteen": "🍽️",
+  Cafeteria: "☕",
+  "Architecture Park": "🌳",
+  Ground: "🏟️",
+  "Sports Complex": "🏃",
+  Basement: "🏢",
+  "Back Benches": "🪑",
+};
+const ACTIVITY_HINTS = [
+  "Study buddy · Library",
+  "Food run · canteen",
+  "Coffee + chill",
+  "Walk around campus",
+  "Sports / badminton",
+  "Just free to talk",
+  "Project help",
+  "Quiet hang · benches",
+];
+const PULSE_CHIPS = [
+  "🔥 Something wild just happened…",
+  "📚 Library energy right now",
+  "🍽️ Main canteen — anyone?",
+  "🏀 Ground / sports?",
+  "🌙 Night campus hits different",
+  "😂 Random BMSCE thought",
+];
 
 function timeAgo(iso?: string) {
   if (!iso) return "";
@@ -36,7 +71,7 @@ export default function HomePage() {
   const [clubEvents, setClubEvents] = useState<any[]>([]);
   const [pulseText, setPulseText] = useState("");
   const [liveNote, setLiveNote] = useState("");
-  const [livePlace, setLivePlace] = useState("Nescafe");
+  const [livePlace, setLivePlace] = useState("Library");
   const [streak, setStreak] = useState(0);
   const [msg, setMsg] = useState("");
   const [err, setErr] = useState("");
@@ -64,21 +99,21 @@ export default function HomePage() {
       if (!user) { router.push("/login"); return; }
       setMyId(user.id);
       touchPresence(user.id);
-      ensureNotifyPermission();
-      setStreak(await bumpOpenStreak(user.id));
       const { data: prof } = await supabase.from("profiles").select("full_name, username, avatar_url").eq("id", user.id).maybeSingle();
       setName(prof?.full_name || prof?.username || "there");
       setNeedsPhoto(!prof?.avatar_url);
-      await refresh(user.id);
       setBlackout(isMidnightBlackout());
       setCd(blackoutCountdown());
       setLoading(false);
+      ensureNotifyPermission();
+      bumpOpenStreak(user.id).then(setStreak).catch(() => {});
+      void refresh(user.id);
     })();
   }, [router]);
 
   useEffect(() => {
     if (!myId) return;
-    const id = window.setInterval(() => { void refresh(myId); }, 20000);
+    const id = window.setInterval(() => { void refresh(myId); }, 45000);
     return () => clearInterval(id);
   }, [myId]);
 
@@ -196,6 +231,14 @@ export default function HomePage() {
           <Link href="/lounge" className="quick-tile pink"><span className="qt-ico">◈</span><div className="qt-title">Lounge</div><div className="qt-sub">Open chat</div></Link>
           <Link href="/inbox" className="quick-tile cyan"><span className="qt-ico">◇</span><div className="qt-title">Messages</div><div className="qt-sub">DMs</div></Link>
           <Link href="/clubs" className="quick-tile emerald"><span className="qt-ico">✦</span><div className="qt-title">Clubs</div><div className="qt-sub">Events</div></Link>
+        </div>
+
+        <div className="section-label">Campus tools</div>
+        <div className="quick-grid" style={{ marginBottom: 12 }}>
+          <Link href="/hostel" className="quick-tile emerald"><span className="qt-ico">🏠</span><div className="qt-title">Hostel</div><div className="qt-sub">Needs · market</div></Link>
+          <Link href="/schedule" className="quick-tile cyan"><span className="qt-ico">📅</span><div className="qt-title">Schedule</div><div className="qt-sub">Classes · reminders</div></Link>
+          <Link href="/radar" className="quick-tile violet"><span className="qt-ico">📡</span><div className="qt-title">Radar</div><div className="qt-sub">Nearby intents</div></Link>
+          <Link href="/explore" className="quick-tile pink"><span className="qt-ico">✦</span><div className="qt-title">More tools</div><div className="qt-sub">Teams · challenges</div></Link>
         </div>
 
         <div className="row" style={{ gap: 8, marginBottom: 12 }}>
