@@ -2,15 +2,17 @@
 import { useEffect } from "react";
 import { playWordReveal, playOut } from "@/lib/splashSounds";
 
-const SESSION_KEY = "hatch_splash_v6";
-const MIN_MS = 1400;
-const FADE_MS = 320;
+const SESSION_KEY = "hatch_splash_v7";
+/** Match Web Audio hook (~0.78s) + short hold, then fade */
+const HOLD_MS = 950;
+const FADE_MS = 280;
 
 /**
  * Professional boot sequence:
- * 1. HTML #hatch-boot is already visible before React (no blank / Loading flash)
- * 2. Animate word once per session, then fade and remove
- * 3. Revisit same session → hide boot instantly
+ * 1. HTML #hatch-boot is already visible before React
+ * 2. Sound + letter animation start together
+ * 3. Soft out tone when fade starts
+ * 4. Same session → skip instantly
  */
 export default function SplashScreen() {
   useEffect(() => {
@@ -30,6 +32,7 @@ export default function SplashScreen() {
       return;
     }
 
+    // Animation + sound start together
     boot.classList.add("hatch-boot-animate");
     try {
       playWordReveal();
@@ -44,7 +47,7 @@ export default function SplashScreen() {
       } catch {
         /* */
       }
-    }, MIN_MS);
+    }, HOLD_MS);
 
     const tHide = window.setTimeout(() => {
       try {
@@ -53,7 +56,7 @@ export default function SplashScreen() {
         /* */
       }
       boot.remove();
-    }, MIN_MS + FADE_MS);
+    }, HOLD_MS + FADE_MS);
 
     return () => {
       clearTimeout(tOut);
