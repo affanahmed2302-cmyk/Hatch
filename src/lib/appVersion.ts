@@ -1,5 +1,5 @@
-export const APP_VERSION = '5.16.2'
-export const APP_BUILD = '2026-10-15-error-rootcause'
+export const APP_VERSION = '5.16.3'
+export const APP_BUILD = '2026-10-15-dom-fix'
 
 export async function checkForAppUpdate(): Promise<{
   updated: boolean

@@ -30,7 +30,6 @@ function nameOf(e: unknown): string | undefined {
   return undefined;
 }
 
-/** Heuristic root-cause explanations for common Hatch failures */
 export function diagnoseError(err: unknown, context?: string): Diagnosed {
   const raw = str(err);
   const stack = stackOf(err);
@@ -38,7 +37,22 @@ export function diagnoseError(err: unknown, context?: string): Diagnosed {
   const lower = raw.toLowerCase();
   const full = (raw + " " + (stack || "")).toLowerCase();
 
-  // Known patterns → clear root cause
+  if (
+    full.includes("insertbefore") ||
+    full.includes("removechild") ||
+    full.includes("not a child of this node") ||
+    full.includes("notfounderror")
+  ) {
+    return {
+      title: "DOM conflict (splash / navigation)",
+      rootCause:
+        "React tried to update the page after something removed or moved a DOM node React still owned (often the splash #hatch-boot via .remove()). This shows up when you open another tab/route.",
+      hint: "Fixed in v5.16.3 — splash only hides nodes, never removes them. Hard refresh once.",
+      raw,
+      stack,
+      name,
+    };
+  }
   if (full.includes("invalid regular expression") || full.includes("nothing to repeat")) {
     return {
       title: "Broken recovery script",
@@ -99,26 +113,6 @@ export function diagnoseError(err: unknown, context?: string): Diagnosed {
       name,
     };
   }
-  if (full.includes("column") && (full.includes("does not exist") || full.includes("undefined"))) {
-    return {
-      title: "Missing database column",
-      rootCause: "Code expects a profile/table column that is not in the schema.",
-      hint: "Add the column via SQL or align the select() fields with the real schema.",
-      raw,
-      stack,
-      name,
-    };
-  }
-  if (full.includes("quotaexceeded") || full.includes("localstorage") || full.includes("exceeded the quota")) {
-    return {
-      title: "Storage full",
-      rootCause: "Browser localStorage/sessionStorage is full or blocked.",
-      hint: "Clear site data for this origin.",
-      raw,
-      stack,
-      name,
-    };
-  }
   if (name === "TypeError" && (lower.includes("undefined") || lower.includes("null"))) {
     return {
       title: "Null / undefined access",
@@ -134,18 +128,8 @@ export function diagnoseError(err: unknown, context?: string): Diagnosed {
   if (full.includes("hydration") || full.includes("did not match")) {
     return {
       title: "React hydration mismatch",
-      rootCause: "Server-rendered HTML did not match the first client render (often date/random/browser-only APIs).",
+      rootCause: "Server-rendered HTML did not match the first client render.",
       hint: "Avoid Date.now()/window in first render; gate client-only UI with useEffect.",
-      raw,
-      stack,
-      name,
-    };
-  }
-  if (full.includes("minified react error")) {
-    return {
-      title: "React internal error",
-      rootCause: "React threw a production (minified) error. Message alone is incomplete without the error code URL.",
-      hint: "Open the full stack below and the react.dev error link if present.",
       raw,
       stack,
       name,

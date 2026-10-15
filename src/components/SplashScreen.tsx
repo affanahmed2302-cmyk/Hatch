@@ -2,18 +2,27 @@
 import { useEffect } from "react";
 import { playWordReveal, playOut } from "@/lib/splashSounds";
 
-const SESSION_KEY = "hatch_splash_v7";
-/** Match Web Audio hook (~0.78s) + short hold, then fade */
+const SESSION_KEY = "hatch_splash_v9";
 const HOLD_MS = 950;
 const FADE_MS = 280;
 
 /**
- * Professional boot sequence:
- * 1. HTML #hatch-boot is already visible before React
- * 2. Sound + letter animation start together
- * 3. Soft out tone when fade starts
- * 4. Same session → skip instantly
+ * CRITICAL: Never call boot.remove() — #hatch-boot is rendered by React in layout.
+ * Removing it from outside React corrupts the fiber tree →
+ * NotFoundError insertBefore/removeChild on the next route change ("any other tab").
+ * Only toggle CSS classes / aria-hidden / visibility.
  */
+function hideBoot(boot: HTMLElement) {
+  boot.classList.add("hatch-boot-out");
+  boot.classList.add("hatch-boot-done");
+  boot.setAttribute("aria-hidden", "true");
+  boot.style.pointerEvents = "none";
+  // Keep node in DOM; just hide after fade
+  window.setTimeout(() => {
+    boot.style.display = "none";
+  }, FADE_MS + 40);
+}
+
 export default function SplashScreen() {
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -28,11 +37,12 @@ export default function SplashScreen() {
     }
 
     if (seen) {
-      boot.remove();
+      boot.style.display = "none";
+      boot.setAttribute("aria-hidden", "true");
+      boot.classList.add("hatch-boot-done");
       return;
     }
 
-    // Animation + sound start together
     boot.classList.add("hatch-boot-animate");
     try {
       playWordReveal();
@@ -55,7 +65,7 @@ export default function SplashScreen() {
       } catch {
         /* */
       }
-      boot.remove();
+      hideBoot(boot);
     }, HOLD_MS + FADE_MS);
 
     return () => {

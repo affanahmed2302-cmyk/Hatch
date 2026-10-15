@@ -1,5 +1,5 @@
-/* Hatch SW v9 — network-first */
-const CACHE = "hatch-static-v9";
+/* Hatch SW v10 — network-first */
+const CACHE = "hatch-static-v10";
 
 self.addEventListener("install", (event) => {
   self.skipWaiting();
@@ -19,9 +19,7 @@ self.addEventListener("activate", (event) => {
 });
 
 self.addEventListener("message", (event) => {
-  if (event.data && event.data.type === "SKIP_WAITING") {
-    self.skipWaiting();
-  }
+  if (event.data && event.data.type === "SKIP_WAITING") self.skipWaiting();
   if (event.data && event.data.type === "CLEAR_ALL") {
     event.waitUntil(
       caches.keys().then((keys) => Promise.all(keys.map((k) => caches.delete(k))))
@@ -31,7 +29,6 @@ self.addEventListener("message", (event) => {
 
 self.addEventListener("fetch", (event) => {
   const url = new URL(event.request.url);
-
   if (
     event.request.mode === "navigate" ||
     url.pathname.startsWith("/_next/") ||
@@ -42,7 +39,6 @@ self.addEventListener("fetch", (event) => {
     );
     return;
   }
-
   if (
     url.pathname.endsWith("icon.svg") ||
     url.pathname.endsWith("manifest.json") ||
@@ -68,8 +64,8 @@ self.addEventListener("push", (event) => {
   event.waitUntil(
     self.registration.showNotification(data.title || "Hatch", {
       body: data.body || "",
-      icon: "/icon.svg?v=energy-h-v9",
-      badge: "/icon.svg?v=energy-h-v9",
+      icon: "/icon.svg?v=energy-h-v10",
+      badge: "/icon.svg?v=energy-h-v10",
       data: { url: data.url || "/home" },
       requireInteraction: true,
     })

@@ -14,7 +14,7 @@ import { registerPushSubscription } from "@/lib/pushClient";
 import { maybeDailyPeakNudge } from "@/lib/dailyNudge";
 import { APP_VERSION } from "@/lib/appVersion";
 
-const RECOVERY_KEY = "hatch_sw_recovery_v9";
+const RECOVERY_KEY = "hatch_sw_recovery_v10";
 
 async function forceCleanClient() {
   try {
@@ -56,7 +56,7 @@ export default function Providers({ children }: { children: React.ReactNode }) {
       }
 
       if ("serviceWorker" in navigator) {
-        navigator.serviceWorker.register("/sw.js?v=9").catch(() => {});
+        navigator.serviceWorker.register("/sw.js?v=10").catch(() => {});
       }
 
       try {
