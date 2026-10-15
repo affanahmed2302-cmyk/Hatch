@@ -1,5 +1,5 @@
-export const APP_VERSION = '5.18.0'
-export const APP_BUILD = '2026-10-15-mode-split'
+export const APP_VERSION = '5.19.0'
+export const APP_BUILD = '2026-10-15-dual-mode-arch'
 
 export async function checkForAppUpdate(): Promise<{
   updated: boolean
