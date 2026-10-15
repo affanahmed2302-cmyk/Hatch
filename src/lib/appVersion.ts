@@ -1,5 +1,5 @@
-export const APP_VERSION = '5.16.3'
-export const APP_BUILD = '2026-10-15-dom-fix'
+export const APP_VERSION = '5.17.0'
+export const APP_BUILD = '2026-10-15-ac-in-chat'
 
 export async function checkForAppUpdate(): Promise<{
   updated: boolean

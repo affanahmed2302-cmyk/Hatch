@@ -1,7 +1,7 @@
-import { supabase, ensureProfile } from './supabase'
-import { collegePodFromEmail, extractDomain } from './college'
+import { supabase, ensureProfile, SUPER_ADMINS, needsTermsAcceptance } from './supabase'
+import { collegePodFromEmail, extractDomain, isAllowedStudentEmail } from './college'
 
-/** Start Google OAuth — enable Google provider in Supabase Auth settings */
+/** Start Google OAuth — student .ac.in / .edu only (enforced after redirect too) */
 export async function signInWithGoogle(redirectPath = '/auth/callback') {
   const origin = typeof window !== 'undefined' ? window.location.origin : ''
   const { data, error } = await supabase.auth.signInWithOAuth({
@@ -11,6 +11,8 @@ export async function signInWithGoogle(redirectPath = '/auth/callback') {
       queryParams: {
         access_type: 'offline',
         prompt: 'select_account',
+        // Hint Google account picker — hard block is still in finalizeOAuthSession
+        hd: '*',
       },
     },
   })
@@ -18,7 +20,7 @@ export async function signInWithGoogle(redirectPath = '/auth/callback') {
   return { ok: true as const, url: data.url, error: null }
 }
 
-/** After OAuth: any Google account is allowed (Gmail, college, etc.) */
+/** After OAuth: ONLY institutional emails (.ac.in / .edu / known college). Super-admins exempt. */
 export async function finalizeOAuthSession(): Promise<{
   ok: boolean
   error?: string
@@ -40,10 +42,21 @@ export async function finalizeOAuthSession(): Promise<{
   }
 
   const email = user.email.toLowerCase()
+  const isAdmin = SUPER_ADMINS.includes(email)
+  const gate = isAllowedStudentEmail(email)
+
+  if (!isAdmin && !gate.ok) {
+    await supabase.auth.signOut()
+    return {
+      ok: false,
+      error:
+        gate.error ||
+        'Use your college Google account (.ac.in / .edu). Personal Gmail is blocked to stop spam.',
+    }
+  }
 
   await ensureProfile(user.id, email)
 
-  // Optional: tag college if institutional domain; personal Gmail still OK
   try {
     const pod = collegePodFromEmail(email)
     const domain = extractDomain(email)
@@ -58,6 +71,14 @@ export async function finalizeOAuthSession(): Promise<{
       .eq('id', user.id)
   } catch {
     /* optional columns */
+  }
+
+  try {
+    if (await needsTermsAcceptance(user.id)) {
+      return { ok: true, next: '/terms' }
+    }
+  } catch {
+    /* */
   }
 
   return { ok: true, next: '/home' }
