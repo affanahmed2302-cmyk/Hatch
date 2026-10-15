@@ -39,8 +39,6 @@ export function isRecentlyOnline(lastSeen?: string | null) {
 }
 
 const _rl: Record<string, { t: number; c: number }> = {}
-/** Client rate limit. rateLimit(key) / rateLimit(key, ms) = 1 per window.
- *  rateLimit(key, maxCount, windowMs) = maxCount actions per window. */
 export function rateLimit(key: string, a = 2000, b?: number): boolean {
   const now = Date.now()
   if (typeof b === "number") {
@@ -62,18 +60,25 @@ export function rateLimit(key: string, a = 2000, b?: number): boolean {
   return true
 }
 
+/** Never show "Unnamed" — full_name → username → email local-part → Student */
 export function displayName(p: {
   full_name?: string | null
   username?: string | null
   pseudonym?: string | null
   use_pseudonym?: boolean | null
+  email?: string | null
 }) {
-  if (p?.use_pseudonym && p?.pseudonym) return p.pseudonym
+  if (p?.use_pseudonym && p?.pseudonym) return String(p.pseudonym).trim()
   const n = (p?.full_name || '').trim()
-  if (n && n.toLowerCase() !== 'student') return n
+  if (n && n.toLowerCase() !== 'student' && n.toLowerCase() !== 'unnamed') return n
   const u = (p?.username || '').trim()
-  if (u) return '@' + u
-  return 'Unnamed'
+  if (u) return u.startsWith('@') ? u : u
+  const em = (p?.email || '').trim()
+  if (em.includes('@')) {
+    const local = em.split('@')[0].replace(/[._]/g, ' ')
+    if (local.length >= 2) return local.charAt(0).toUpperCase() + local.slice(1)
+  }
+  return 'Student'
 }
 
 export function handleOf(p: { username?: string | null; full_name?: string | null }) {
@@ -153,15 +158,31 @@ export async function saveProfile(userId: string, fields: Record<string, unknown
 
 export async function ensureProfile(userId: string, email?: string | null) {
   try {
-    const { data } = await supabase.from('profiles').select('id').eq('id', userId).maybeSingle()
+    const { data } = await supabase.from('profiles').select('id, full_name, username').eq('id', userId).maybeSingle()
     if (!data) {
       const pod = email ? collegePodFromEmail(email) : 'bmsce'
       const domain = email ? extractDomain(email) : null
+      const local = email ? email.split('@')[0].replace(/[._0-9]/g, ' ').trim() : ''
+      const guessName = local ? local.split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ').slice(0, 40) : null
       await supabase.from('profiles').upsert({
-        id: userId, email: email || null, college: pod.toUpperCase(), college_pod: pod,
-        college_domain: domain, role: 'student',
-        skills: [], connection_count: 0, terms_accepted: false, rep_score: 0,
+        id: userId,
+        email: email || null,
+        full_name: guessName || null,
+        college: pod.toUpperCase(),
+        college_pod: pod,
+        college_domain: domain,
+        role: 'student',
+        skills: [],
+        connection_count: 0,
+        terms_accepted: false,
+        rep_score: 0,
       }, { onConflict: 'id' })
+    } else if ((!data.full_name || data.full_name === 'Student') && email) {
+      const local = email.split('@')[0].replace(/[._0-9]/g, ' ').trim()
+      const guessName = local ? local.split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ').slice(0, 40) : null
+      if (guessName) {
+        await supabase.from('profiles').update({ full_name: guessName }).eq('id', userId)
+      }
     }
   } catch { /* ignore */ }
 }
@@ -205,6 +226,7 @@ export function jitsiRoom(kind: 'dm' | 'team', id: string) {
   return `hatch${kind}${clean}`
 }
 
+/** WA/IG-style: no prejoin, no login walls, jump straight into call */
 export function jitsiEmbedUrl(room: string, audioOnly = false, displayName = 'Hatch') {
   const params = [
     'config.prejoinPageEnabled=false',
@@ -216,8 +238,14 @@ export function jitsiEmbedUrl(room: string, audioOnly = false, displayName = 'Ha
     'config.requireDisplayName=false',
     'config.startWithAudioMuted=false',
     audioOnly ? 'config.startWithVideoMuted=true' : 'config.startWithVideoMuted=false',
+    'config.disableModeratorIndicator=true',
+    'config.enableLobby=false',
+    'config.lobby.enabled=false',
+    'config.enableInsecureRoomNameWarning=false',
     'interfaceConfig.MOBILE_APP_PROMO=false',
     'interfaceConfig.SHOW_JITSI_WATERMARK=false',
+    'interfaceConfig.SHOW_WATERMARK_FOR_GUESTS=false',
+    'interfaceConfig.DISABLE_JOIN_LEAVE_NOTIFICATIONS=true',
     `userInfo.displayName=${encodeURIComponent(displayName)}`,
   ].join('&')
   return `https://meet.jit.si/${encodeURIComponent(room)}#${params}`

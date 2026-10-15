@@ -7,17 +7,6 @@ import { haptic, playPing, bumpChatStreak, markMessagesRead, bumpDaily } from "@
 import { ensureNotifyPermission } from "@/lib/notify";
 import { startCall, callEmbedUrl, type CallRow } from "@/lib/calls";
 
-const REACTIONS = ["👍", "❤️", "😂", "🔥", "👏", "😮"];
-const GIFTS = [
-  { id: "coffee", emoji: "☕", label: "Coffee" },
-  { id: "star", emoji: "⭐", label: "Star" },
-  { id: "rocket", emoji: "🚀", label: "Rocket" },
-  { id: "trophy", emoji: "🏆", label: "Trophy" },
-  { id: "heart", emoji: "💜", label: "Heart" },
-  { id: "pizza", emoji: "🍕", label: "Pizza" },
-];
-const QUICK = ["On my way 👋", "Library?", "Canteen in 5", "Busy rn", "Ping me later", "Thanks!"];
-
 type Msg = {
   id: string;
   sender_id: string;
@@ -29,6 +18,7 @@ type Msg = {
   read_at?: string | null;
 };
 
+/** Clean DM — IG/WA style: name, text, voice, call. No clutter. */
 export default function ChatPage() {
   const { id: peerId } = useParams<{ id: string }>();
   const [myId, setMyId] = useState<string | null>(null);
@@ -37,15 +27,10 @@ export default function ChatPage() {
   const [msgs, setMsgs] = useState<Msg[]>([]);
   const [text, setText] = useState("");
   const [loading, setLoading] = useState(true);
-  const [ctxBanner, setCtxBanner] = useState<string | null>(null);
-  const [ctxFrom, setCtxFrom] = useState<string | null>(null);
   const [recording, setRecording] = useState(false);
-  const [showGifts, setShowGifts] = useState(false);
-  const [showQuick, setShowQuick] = useState(false);
   const [callUrl, setCallUrl] = useState<string | null>(null);
   const [callErr, setCallErr] = useState("");
-  const [streak, setStreak] = useState(0);
-  const [replyTo, setReplyTo] = useState<Msg | null>(null);
+  const [online, setOnline] = useState(false);
   const bottom = useRef<HTMLDivElement>(null);
   const mediaRec = useRef<MediaRecorder | null>(null);
   const chunks = useRef<Blob[]>([]);
@@ -75,40 +60,41 @@ export default function ChatPage() {
       }
       setMyId(user.id);
       ensureNotifyPermission();
+
       try {
         const q = new URLSearchParams(window.location.search);
-        const from = q.get("from");
-        const ctx = q.get("ctx");
-        if (from) setCtxFrom(from);
-        if (ctx) {
-          const decoded = decodeURIComponent(ctx).slice(0, 180);
-          setCtxBanner(decoded);
-          setText((prev) => prev || decoded);
-        }
         if (q.get("call") === "1") {
           const u = sessionStorage.getItem("hatch_active_call_url");
           if (u) setCallUrl(u);
         }
+        const ctx = q.get("ctx");
+        if (ctx) setText(decodeURIComponent(ctx).slice(0, 160));
       } catch {
         /* */
       }
+
       const { data: me } = await supabase
         .from("profiles")
-        .select("full_name, username")
+        .select("full_name, username, email")
         .eq("id", user.id)
         .maybeSingle();
       setMyName(displayName(me || {}) || "Hatch");
+
+      // Always fetch name fields so header never says Unknown
       const { data: p } = await supabase
         .from("profiles")
-        .select("id, full_name, username, avatar_url, last_seen")
+        .select("id, full_name, username, email, avatar_url, last_seen, department")
         .eq("id", peerId)
         .maybeSingle();
       setPeer(p);
+      if (p?.last_seen) {
+        setOnline(Date.now() - new Date(p.last_seen).getTime() < 3 * 60 * 1000);
+      }
+
       await loadMsgs(user.id);
       await markMessagesRead(user.id, peerId);
       try {
-        const s = await bumpChatStreak(user.id, peerId);
-        if (typeof s === "number") setStreak(s);
+        await bumpChatStreak(user.id, peerId);
       } catch {
         /* */
       }
@@ -132,38 +118,20 @@ export default function ChatPage() {
     };
   }, [myId, peerId, loadMsgs]);
 
-  async function insertMsg(payload: Record<string, unknown>) {
+  async function send(body?: string) {
     if (!myId) return;
+    const content = (body ?? text).trim();
+    if (!content) return;
     if (!rateLimit("msg:" + myId, 50, 60000)) return;
+    setText("");
     await supabase.from("messages").insert({
       sender_id: myId,
       receiver_id: peerId,
-      ...payload,
+      content,
     });
     await bumpDaily(myId, "messages");
     await bumpChatStreak(myId, peerId);
     await loadMsgs(myId);
-  }
-
-  async function sendText(content?: string) {
-    const body = (content ?? text).trim();
-    if (!body) return;
-    setText("");
-    const final = replyTo
-      ? `↩ ${String(replyTo.content || "media").slice(0, 40)}\n${body}`
-      : body;
-    setReplyTo(null);
-    await insertMsg({ content: final });
-  }
-
-  async function sendGift(g: (typeof GIFTS)[0]) {
-    setShowGifts(false);
-    await insertMsg({ content: `🎁 Gift: ${g.emoji} ${g.label}` });
-    haptic([10, 30, 10]);
-  }
-
-  async function sendReaction(emoji: string) {
-    await insertMsg({ content: emoji });
   }
 
   async function startVoice() {
@@ -177,30 +145,32 @@ export default function ChatPage() {
       rec.onstop = async () => {
         stream.getTracks().forEach((t) => t.stop());
         const blob = new Blob(chunks.current, { type: "audio/webm" });
-        if (blob.size < 200) return;
+        if (blob.size < 200 || !myId) return;
         const path = `voice/${myId}/${Date.now()}.webm`;
         const { error } = await supabase.storage.from("chat-media").upload(path, blob, {
           contentType: "audio/webm",
           upsert: false,
         });
         if (error) {
-          // Fallback: mark as voice note text if storage missing
-          await insertMsg({ content: "🎤 Voice note (upload setup needed — create chat-media bucket)" });
+          await send("🎤 Voice note");
           return;
         }
         const { data: pub } = supabase.storage.from("chat-media").getPublicUrl(path);
-        await insertMsg({
+        await supabase.from("messages").insert({
+          sender_id: myId,
+          receiver_id: peerId,
           content: "🎤 Voice note",
           media_url: pub.publicUrl,
           media_type: "audio",
         });
+        await loadMsgs(myId);
       };
       mediaRec.current = rec;
       rec.start();
       setRecording(true);
       haptic(12);
     } catch {
-      setCallErr("Mic permission needed for voice notes");
+      setCallErr("Allow microphone for voice notes");
     }
   }
 
@@ -216,6 +186,16 @@ export default function ChatPage() {
   async function doCall(type: "audio" | "video") {
     if (!myId) return;
     setCallErr("");
+    // Request mic/cam before joining — like WA
+    try {
+      await navigator.mediaDevices.getUserMedia({
+        audio: true,
+        video: type === "video",
+      }).then((s) => s.getTracks().forEach((t) => t.stop()));
+    } catch {
+      setCallErr("Allow mic" + (type === "video" ? " & camera" : "") + " to call");
+      return;
+    }
     const res = await startCall(myId, peerId, type);
     if (!res.ok || !res.call) {
       setCallErr(res.error || "Call failed");
@@ -227,44 +207,103 @@ export default function ChatPage() {
     sessionStorage.setItem("hatch_active_call_id", res.call.id);
   }
 
-  function copyChatLink() {
-    try {
-      void navigator.clipboard.writeText(location.href);
-      haptic(8);
-    } catch {
-      /* */
-    }
-  }
+  const peerName = displayName(peer || {});
 
   if (loading) {
     return (
       <div className="shell" style={{ display: "flex", alignItems: "center", justifyContent: "center" }}>
-        <span className="muted">Loading chat…</span>
+        <span className="muted">…</span>
+      </div>
+    );
+  }
+
+  // Full-screen call — no extra login, just End (WA style)
+  if (callUrl) {
+    return (
+      <div className="shell" style={{ padding: 0, height: "100dvh", display: "flex", flexDirection: "column" }}>
+        <div
+          className="topbar"
+          style={{
+            background: "linear-gradient(90deg,rgba(16,185,129,0.25),rgba(139,92,246,0.2))",
+          }}
+        >
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{ fontWeight: 800, fontSize: 15 }}>{peerName}</div>
+            <div className="muted" style={{ fontSize: 11 }}>In call · stay on this screen</div>
+          </div>
+          <button
+            className="btn btn-sm"
+            style={{ background: "#f43f5e", color: "#fff" }}
+            onClick={() => {
+              setCallUrl(null);
+              sessionStorage.removeItem("hatch_active_call_url");
+            }}
+          >
+            End
+          </button>
+        </div>
+        <iframe
+          title="call"
+          src={callUrl}
+          style={{ flex: 1, width: "100%", border: 0, background: "#000" }}
+          allow="camera; microphone; fullscreen; autoplay; display-capture"
+        />
       </div>
     );
   }
 
   return (
     <div className="shell" style={{ display: "flex", flexDirection: "column", height: "100dvh" }}>
-      {/* 1 Header + profile + streak */}
-      <div className="topbar" style={{ gap: 8 }}>
-        <Link href="/inbox" className="btn-ghost btn-sm">←</Link>
+      {/* Header — name always visible */}
+      <div className="topbar" style={{ gap: 10 }}>
+        <Link href="/inbox" className="btn-ghost btn-sm" style={{ padding: "8px 10px" }}>
+          ←
+        </Link>
         <Link
           href={"/u/" + peerId}
-          style={{ flex: 1, textDecoration: "none", color: "inherit", minWidth: 0 }}
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: 10,
+            flex: 1,
+            minWidth: 0,
+            textDecoration: "none",
+            color: "inherit",
+          }}
         >
-          <div style={{ fontWeight: 800, fontSize: 15, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-            {displayName(peer || {}) || "Chat"}
-          </div>
-          <div className="muted" style={{ fontSize: 10 }}>
-            {streak > 0 ? `🔥 ${streak}-day chat streak` : "Campus DM"}
+          <div
+            style={{
+              width: 40,
+              height: 40,
+              borderRadius: "50%",
+              flexShrink: 0,
+              background: peer?.avatar_url
+                ? `url(${peer.avatar_url}) center/cover`
+                : "linear-gradient(135deg,#8b5cf6,#ec4899)",
+              boxShadow: online ? "0 0 0 2px #34d399" : undefined,
+            }}
+          />
+          <div style={{ minWidth: 0 }}>
+            <div
+              style={{
+                fontWeight: 800,
+                fontSize: 15,
+                overflow: "hidden",
+                textOverflow: "ellipsis",
+                whiteSpace: "nowrap",
+              }}
+            >
+              {peerName}
+            </div>
+            <div className="muted" style={{ fontSize: 11 }}>
+              {online ? "Active now" : peer?.department || "Campus"}
+            </div>
           </div>
         </Link>
-        {/* 2–3 Audio / Video call */}
-        <button type="button" className="btn-ghost btn-sm" title="Audio call" onClick={() => doCall("audio")}>
+        <button type="button" className="btn-ghost btn-sm" aria-label="Audio call" onClick={() => doCall("audio")}>
           📞
         </button>
-        <button type="button" className="btn-ghost btn-sm" title="Video call" onClick={() => doCall("video")}>
+        <button type="button" className="btn-ghost btn-sm" aria-label="Video call" onClick={() => doCall("video")}>
           📹
         </button>
       </div>
@@ -275,143 +314,93 @@ export default function ChatPage() {
         </div>
       )}
 
-      {/* 4 In-chat call embed */}
-      {callUrl && (
-        <div style={{ height: "40vh", borderBottom: "1px solid rgba(255,255,255,0.08)", position: "relative" }}>
-          <iframe title="call" src={callUrl} style={{ width: "100%", height: "100%", border: 0 }} allow="camera; microphone; fullscreen; display-capture" />
-          <button
-            type="button"
-            className="btn btn-sm"
-            style={{ position: "absolute", top: 8, right: 8, background: "#f43f5e" }}
-            onClick={() => {
-              setCallUrl(null);
-              sessionStorage.removeItem("hatch_active_call_url");
-            }}
-          >
-            End
-          </button>
-        </div>
-      )}
-
-      <div style={{ flex: 1, overflowY: "auto", padding: 16 }}>
-        {/* 5 Context from I'm Free / Pulse */}
-        {ctxBanner && (
-          <div
-            className="card"
-            style={{
-              marginBottom: 12,
-              border: "1px solid rgba(16,185,129,0.35)",
-              background: "rgba(16,185,129,0.1)",
-            }}
-          >
-            <p style={{ fontSize: 11, fontWeight: 800, opacity: 0.8 }}>
-              {ctxFrom === "hostel"
-                ? "HOSTEL"
-                : ctxFrom === "pulse"
-                  ? "FROM PULSE"
-                  : "CONTEXT"}
+      <div style={{ flex: 1, overflowY: "auto", padding: "12px 14px" }}>
+        {msgs.length === 0 && (
+          <div style={{ textAlign: "center", padding: "48px 16px" }}>
+            <div
+              style={{
+                width: 72,
+                height: 72,
+                borderRadius: "50%",
+                margin: "0 auto 12px",
+                background: peer?.avatar_url
+                  ? `url(${peer.avatar_url}) center/cover`
+                  : "linear-gradient(135deg,#8b5cf6,#ec4899)",
+              }}
+            />
+            <div style={{ fontWeight: 800, fontSize: 17 }}>{peerName}</div>
+            <p className="muted" style={{ fontSize: 13, marginTop: 6 }}>
+              Say hi — keep it real, keep it campus
             </p>
-            <p style={{ fontSize: 13, marginTop: 4 }}>{ctxBanner}</p>
           </div>
         )}
-
-        {/* 6–10 Message bubbles: text, voice, gift, media */}
         {msgs.map((m) => {
           const mine = m.sender_id === myId;
           return (
             <div
               key={m.id}
               className={mine ? "bubble-me" : "bubble-them"}
-              style={{ marginBottom: 8, cursor: "pointer" }}
-              onDoubleClick={() => setReplyTo(m)}
-              title="Double-tap to reply"
+              style={{ marginBottom: 6 }}
             >
               {m.media_type === "audio" && m.media_url ? (
-                <audio controls src={m.media_url} style={{ maxWidth: "100%", height: 36 }} />
-              ) : m.media_url ? (
-                <a href={m.media_url} target="_blank" rel="noreferrer" style={{ color: "inherit", textDecoration: "underline" }}>
-                  📎 Attachment
-                </a>
+                <audio controls src={m.media_url} style={{ maxWidth: 220, height: 36 }} />
               ) : (
                 <span style={{ whiteSpace: "pre-wrap" }}>{m.content}</span>
               )}
-              <div style={{ fontSize: 9, opacity: 0.7, marginTop: 4 }}>
-                {new Date(m.created_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
-                {mine && m.read_at ? " · Read" : mine ? " · Sent" : ""}
-              </div>
             </div>
           );
         })}
         <div ref={bottom} />
       </div>
 
-      {/* 11 Reply preview */}
-      {replyTo && (
-        <div className="row" style={{ padding: "6px 12px", gap: 8, borderTop: "1px solid rgba(255,255,255,0.06)", background: "rgba(139,92,246,0.1)" }}>
-          <span className="muted" style={{ fontSize: 11, flex: 1 }}>
-            Replying: {String(replyTo.content || "media").slice(0, 60)}
-          </span>
-          <button type="button" className="btn-ghost btn-sm" onClick={() => setReplyTo(null)}>
-            ✕
-          </button>
-        </div>
-      )}
-
-      {/* 12 Quick replies */}
-      {showQuick && (
-        <div className="row" style={{ padding: "8px 12px", gap: 6, flexWrap: "wrap", borderTop: "1px solid rgba(255,255,255,0.06)" }}>
-          {QUICK.map((q) => (
-            <button key={q} type="button" className="chip" style={{ fontSize: 11 }} onClick={() => sendText(q)}>
-              {q}
-            </button>
-          ))}
-        </div>
-      )}
-
-      {/* 13 Gifts tray */}
-      {showGifts && (
-        <div className="row" style={{ padding: "10px 12px", gap: 8, flexWrap: "wrap", borderTop: "1px solid rgba(255,255,255,0.06)" }}>
-          {GIFTS.map((g) => (
-            <button key={g.id} type="button" className="chip" onClick={() => sendGift(g)}>
-              {g.emoji} {g.label}
-            </button>
-          ))}
-        </div>
-      )}
-
-      {/* 14 Reactions row */}
-      <div className="row" style={{ padding: "4px 12px", gap: 4, justifyContent: "center" }}>
-        {REACTIONS.map((e) => (
-          <button key={e} type="button" style={{ fontSize: 18, padding: 4 }} onClick={() => sendReaction(e)}>
-            {e}
-          </button>
-        ))}
-      </div>
-
-      {/* 15–20 Composer: voice, gift, quick, copy, send */}
-      <div style={{ padding: 12, borderTop: "1px solid rgba(255,255,255,0.08)", display: "flex", gap: 6, alignItems: "center" }}>
-        <button type="button" className="btn-ghost btn-sm" title="Voice note" onClick={() => (recording ? stopVoice() : startVoice())}>
+      {/* Composer — only essentials */}
+      <div
+        style={{
+          padding: "10px 12px calc(10px + env(safe-area-inset-bottom))",
+          borderTop: "1px solid rgba(255,255,255,0.08)",
+          display: "flex",
+          gap: 8,
+          alignItems: "center",
+          background: "rgba(7,7,12,0.92)",
+        }}
+      >
+        <button
+          type="button"
+          className="btn-ghost btn-sm"
+          style={{
+            width: 42,
+            height: 42,
+            borderRadius: "50%",
+            padding: 0,
+            background: recording ? "rgba(244,63,94,0.25)" : undefined,
+          }}
+          onClick={() => (recording ? stopVoice() : startVoice())}
+          aria-label={recording ? "Stop recording" : "Voice note"}
+        >
           {recording ? "⏹" : "🎤"}
-        </button>
-        <button type="button" className="btn-ghost btn-sm" title="Gift" onClick={() => { setShowGifts((v) => !v); setShowQuick(false); }}>
-          🎁
-        </button>
-        <button type="button" className="btn-ghost btn-sm" title="Quick" onClick={() => { setShowQuick((v) => !v); setShowGifts(false); }}>
-          ⚡
-        </button>
-        <button type="button" className="btn-ghost btn-sm" title="Copy link" onClick={copyChatLink}>
-          🔗
         </button>
         <input
           value={text}
           onChange={(e) => setText(e.target.value)}
-          placeholder={recording ? "Recording…" : "Message…"}
-          style={{ flex: 1 }}
-          onKeyDown={(e) => e.key === "Enter" && !e.shiftKey && sendText()}
+          placeholder={recording ? "Recording…" : "Message"}
+          style={{
+            flex: 1,
+            borderRadius: 22,
+            padding: "12px 16px",
+            background: "rgba(255,255,255,0.06)",
+            border: "1px solid rgba(255,255,255,0.08)",
+          }}
+          onKeyDown={(e) => e.key === "Enter" && !e.shiftKey && send()}
           disabled={recording}
         />
-        <button className="btn btn-sm" onClick={() => sendText()} disabled={!text.trim() || recording}>
-          Send
+        <button
+          className="btn btn-sm"
+          style={{ borderRadius: "50%", width: 44, height: 44, padding: 0 }}
+          onClick={() => send()}
+          disabled={!text.trim() || recording}
+          aria-label="Send"
+        >
+          ↑
         </button>
       </div>
     </div>

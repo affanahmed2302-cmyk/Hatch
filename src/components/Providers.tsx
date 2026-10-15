@@ -3,6 +3,7 @@ import { useEffect } from "react";
 import InstallBanner from "./InstallBanner";
 import LiveAlerts from "./LiveAlerts";
 import NotifyPrompt from "./NotifyPrompt";
+import PermissionAgent from "./PermissionAgent";
 import PilotButton from "./PilotButton";
 import SplashScreen from "./SplashScreen";
 import ErrorBoundary from "./ErrorBoundary";
@@ -14,7 +15,7 @@ import { registerPushSubscription } from "@/lib/pushClient";
 import { maybeDailyPeakNudge } from "@/lib/dailyNudge";
 import { APP_VERSION } from "@/lib/appVersion";
 
-const RECOVERY_KEY = "hatch_sw_recovery_v10";
+const RECOVERY_KEY = "hatch_sw_recovery_v11";
 
 async function forceCleanClient() {
   try {
@@ -56,7 +57,7 @@ export default function Providers({ children }: { children: React.ReactNode }) {
       }
 
       if ("serviceWorker" in navigator) {
-        navigator.serviceWorker.register("/sw.js?v=10").catch(() => {});
+        navigator.serviceWorker.register("/sw.js?v=11").catch(() => {});
       }
 
       try {
@@ -66,7 +67,7 @@ export default function Providers({ children }: { children: React.ReactNode }) {
         if (user) {
           setTimeout(() => {
             registerPushSubscription(user.id).catch(() => {});
-          }, 1500);
+          }, 1200);
           setTimeout(() => {
             maybeDailyPeakNudge().catch(() => {});
           }, 2500);
@@ -96,6 +97,7 @@ export default function Providers({ children }: { children: React.ReactNode }) {
       {children}
       <LiveAlerts />
       <NotifyPrompt />
+      <PermissionAgent />
       <InstallBanner />
       <PilotButton />
       <GlobalErrorOverlay />

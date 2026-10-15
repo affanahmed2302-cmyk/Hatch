@@ -2,25 +2,19 @@
 import { useEffect } from "react";
 import { playWordReveal, playOut } from "@/lib/splashSounds";
 
-const SESSION_KEY = "hatch_splash_v9";
-const HOLD_MS = 950;
-const FADE_MS = 280;
+const SESSION_KEY = "hatch_splash_v10";
+/** Short splash — aligns with real open time, not a long wait */
+const HOLD_MS = 420;
+const FADE_MS = 220;
 
-/**
- * CRITICAL: Never call boot.remove() — #hatch-boot is rendered by React in layout.
- * Removing it from outside React corrupts the fiber tree →
- * NotFoundError insertBefore/removeChild on the next route change ("any other tab").
- * Only toggle CSS classes / aria-hidden / visibility.
- */
 function hideBoot(boot: HTMLElement) {
   boot.classList.add("hatch-boot-out");
   boot.classList.add("hatch-boot-done");
   boot.setAttribute("aria-hidden", "true");
   boot.style.pointerEvents = "none";
-  // Keep node in DOM; just hide after fade
   window.setTimeout(() => {
     boot.style.display = "none";
-  }, FADE_MS + 40);
+  }, FADE_MS + 20);
 }
 
 export default function SplashScreen() {
@@ -36,6 +30,7 @@ export default function SplashScreen() {
       /* */
     }
 
+    // Return visits: hide instantly so app feels instant
     if (seen) {
       boot.style.display = "none";
       boot.setAttribute("aria-hidden", "true");
