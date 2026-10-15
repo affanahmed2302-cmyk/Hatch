@@ -34,8 +34,8 @@ export const metadata: Metadata = {
     "mobile-web-app-capable": "yes",
   },
   icons: {
-    icon: [{ url: "/icon.svg?v=energy-h-v7", type: "image/svg+xml" }],
-    apple: [{ url: "/icon.svg?v=energy-h-v7" }],
+    icon: [{ url: "/icon.svg?v=energy-h-v8", type: "image/svg+xml" }],
+    apple: [{ url: "/icon.svg?v=energy-h-v8" }],
   },
 };
 
@@ -51,7 +51,8 @@ export const viewport: Viewport = {
   viewportFit: "cover",
 };
 
-/** Runs before React. Clears poisoned SW/cache when ?fix=1 or after a client crash flag. */
+/** Runs before React. Clears poisoned SW/cache when ?fix=1 or after a client crash flag.
+ *  NO fragile regex — string split only (avoids /?$/ SyntaxError on phones). */
 const RECOVERY_SCRIPT = `
 (function () {
   try {
@@ -62,9 +63,11 @@ const RECOVERY_SCRIPT = `
     if (!force && !crashed) return;
     try { sessionStorage.removeItem("hatch_client_crash"); } catch (e) {}
     var done = function () {
-      var u = location.pathname + (location.search.replace(/[?&](fix|nocache)=1/g, "").replace(/^&/, "?").replace(/\?$/, "") || "") + location.hash;
-      if (force) u = location.pathname + location.hash;
-      location.replace(u || "/");
+      if (force) {
+        location.replace(location.pathname + location.hash || "/");
+        return;
+      }
+      location.replace(location.pathname + location.hash || "/");
     };
     var tasks = [];
     if ("serviceWorker" in navigator) {
@@ -90,8 +93,8 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="en">
       <head>
-        <link rel="apple-touch-icon" href="/icon.svg?v=energy-h-v7" />
-        <link rel="icon" href="/icon.svg?v=energy-h-v7" type="image/svg+xml" />
+        <link rel="apple-touch-icon" href="/icon.svg?v=energy-h-v8" />
+        <link rel="icon" href="/icon.svg?v=energy-h-v8" type="image/svg+xml" />
         <meta name="apple-mobile-web-app-capable" content="yes" />
         <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
         <meta name="apple-mobile-web-app-title" content="Hatch" />
