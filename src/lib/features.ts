@@ -12,7 +12,7 @@ export type FeatureKey =
   | 'feature_club_events'
   | 'maintenance_mode'
 
-/** Defaults when app_settings row missing — Sparks OFF for presentation */
+/** Sparks/Circles OFF by default for official presentations */
 const DEFAULTS: Record<FeatureKey, boolean> = {
   feature_sparks: false,
   dating_app_active: false,
@@ -38,7 +38,6 @@ export async function getFeatureFlags(): Promise<Record<FeatureKey, boolean>> {
   } catch {
     /* missing table → defaults */
   }
-  // Keep sparks + dating_app_active in sync (single product switch)
   const sparksOn = !!(out.feature_sparks && out.dating_app_active)
   out.feature_sparks = sparksOn
   out.dating_app_active = sparksOn
@@ -53,7 +52,12 @@ export async function isFeatureOn(key: FeatureKey): Promise<boolean> {
   return !!flags[key]
 }
 
+/** Internal flag only — UI never says "dating" */
 export async function isDatingAppActive(): Promise<boolean> {
+  return isFeatureOn('feature_sparks')
+}
+
+export async function isCirclesActive(): Promise<boolean> {
   return isFeatureOn('feature_sparks')
 }
 
@@ -92,10 +96,10 @@ export async function setFeatureFlag(
   }
 }
 
-/** Confession window: local hours 0-23, inclusive start, exclusive end (supports overnight e.g. 0–3) */
+/** Default confession window: 10pm (22) → 5am (5) local, overnight */
 export async function getConfessionWindow(): Promise<{ start: number; end: number }> {
-  let start = 0
-  let end = 3
+  let start = 22
+  let end = 5
   try {
     const { data } = await supabase
       .from('app_settings')
@@ -108,7 +112,7 @@ export async function getConfessionWindow(): Promise<{ start: number; end: numbe
       if (row.key === 'confession_window_end') end = n
     }
   } catch {
-    /* defaults */
+    /* defaults 22–5 */
   }
   return { start, end }
 }
@@ -144,14 +148,14 @@ export async function setConfessionWindow(
   }
 }
 
-/** True if confessions feature is on AND current local hour is inside the window */
+/** Open 10pm–5am local by default (overnight window) */
 export async function isConfessionOpenNow(): Promise<boolean> {
   if (!(await isFeatureOn('feature_confessions'))) return false
   const { start, end } = await getConfessionWindow()
   const h = new Date().getHours()
-  if (start === end) return true // 24h when equal
+  if (start === end) return true
   if (start < end) return h >= start && h < end
-  // overnight e.g. 22 → 3
+  // overnight e.g. 22 → 5
   return h >= start || h < end
 }
 
@@ -225,13 +229,11 @@ export function assistantCeoAdvice(m: {
   if (m.messages < m.users * 2) tips.push('Prompt Free-now pings — chat volume is low vs users.')
   if (m.premiumPending > 5) tips.push('Clear pending premium UTRs in Pilot → Commerce.')
   if (m.flags.feature_sparks) {
-    if (m.sparksProfiles < 10) tips.push('Sparks is ON but few profiles — push /sparks/me consent flow.')
-  } else {
-    tips.push('Sparks is OFF — students will not see dating entry points.')
+    if (m.sparksProfiles < 10) tips.push('Circles is ON but few profiles — soft invite classmates.')
   }
-  if (!m.flags.feature_confessions) tips.push('Confessions are OFF.')
-  if (!m.flags.feature_club_portal) tips.push('Club portal is OFF — club leads cannot post events.')
-  if (m.clubEvents === 0) tips.push('No club events yet — onboard 2 club admins via Pilot.')
+  if (!m.flags.feature_confessions) tips.push('Night notes (confessions) are OFF.')
+  if (!m.flags.feature_club_portal) tips.push('Club portal is OFF.')
+  if (m.clubEvents === 0) tips.push('No club events yet — onboard club leads via Pilot.')
   if (!tips.length) tips.push('Metrics healthy — double down on weekly campus drops.')
   return tips
 }

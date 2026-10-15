@@ -52,17 +52,20 @@ export default function SettingsPage() {
   async function saveMode(mode: "professional" | "social" | "both") {
     if (!userId) return;
     setProfileMode(mode);
+    try {
+      localStorage.setItem("hatch_profile_mode", mode);
+    } catch { /* */ }
     const { error } = await supabase.from("profiles").update({
       profile_mode: mode,
       updated_at: new Date().toISOString(),
     }).eq("id", userId);
-    if (error) setErr(error.message + " — run hatch_profile_mode.sql");
+    if (error) setErr(error.message + " — add profile_mode text column if missing");
     else setMsg(
       mode === "professional"
-        ? "Others see career side (skills, GitHub, goals)"
+        ? "Home shows career tools: clubs, teams, schedule, opportunities"
         : mode === "social"
-          ? "Others see social side (bio, vibe, year)"
-          : "Others see full balanced profile"
+          ? "Home shows campus social: I'm Free, Lounge, Pulse, night notes"
+          : "Home shows both professional + social"
     );
   }
 
@@ -112,9 +115,11 @@ export default function SettingsPage() {
         )}
 
         <div className="card stack">
-          <div className="h2">Profile mode</div>
-          <p className="muted" style={{ fontSize: 12 }}>
-            Professional = skills & career · Social = vibe & bio · Both = balanced
+          <div className="h2">Home mode</div>
+          <p className="muted" style={{ fontSize: 12, lineHeight: 1.45 }}>
+            <strong style={{ color: "#e9d5ff" }}>Professional</strong> — clubs, teams, schedule, opportunities on home.{" "}
+            <strong style={{ color: "#e9d5ff" }}>Social</strong> — I&apos;m Free, Lounge, Pulse, night notes.{" "}
+            <strong style={{ color: "#e9d5ff" }}>Both</strong> — balanced.
           </p>
           <div className="row" style={{ gap: 6, flexWrap: "wrap" }}>
             {(["professional", "social", "both"] as const).map((m) => (
@@ -127,6 +132,7 @@ export default function SettingsPage() {
               </button>
             ))}
           </div>
+          <p className="muted" style={{ fontSize: 11 }}>Changes apply on Home immediately after you go back.</p>
         </div>
 
         <Link href="/profile" className="card" style={{ textDecoration: "none", color: "inherit" }}>
@@ -134,19 +140,19 @@ export default function SettingsPage() {
           <p className="muted" style={{ fontSize: 12 }}>Photo, skills, GitHub, bio</p>
         </Link>
 
-        <Link href="/explore" className="card" style={{ textDecoration: "none", color: "inherit" }}>
-          <div style={{ fontWeight: 700 }}>Explore</div>
-          <p className="muted" style={{ fontSize: 12 }}>Teams, clubs, tools</p>
-        </Link>
-
-        <Link href="/sparks" className="card" style={{ textDecoration: "none", color: "inherit" }}>
-          <div style={{ fontWeight: 700 }}>Campus Sparks</div>
-          <p className="muted" style={{ fontSize: 12 }}>Dating · optional</p>
+        <Link href="/tools" className="card" style={{ textDecoration: "none", color: "inherit" }}>
+          <div style={{ fontWeight: 700 }}>All tools</div>
+          <p className="muted" style={{ fontSize: 12 }}>Everything in one place</p>
         </Link>
 
         <Link href="/clubs" className="card" style={{ textDecoration: "none", color: "inherit" }}>
           <div style={{ fontWeight: 700 }}>Clubs</div>
-          <p className="muted" style={{ fontSize: 12 }}>Club cores & events</p>
+          <p className="muted" style={{ fontSize: 12 }}>Events & club cores</p>
+        </Link>
+
+        <Link href="/sparks" className="card" style={{ textDecoration: "none", color: "inherit" }}>
+          <div style={{ fontWeight: 700 }}>Circles</div>
+          <p className="muted" style={{ fontSize: 12 }}>Optional classmate connections</p>
         </Link>
 
         <div className="card stack">
@@ -160,12 +166,11 @@ export default function SettingsPage() {
         <div className="card stack">
           <div className="h2">Notifications</div>
           <p className="muted" style={{ fontSize: 12 }}>
-            Enable browser push for replies, calls, and a daily campus nudge at peak time.
-            Phone is saved for future SMS (needs SMS provider later).
+            Messages, calls, I&apos;m Free pings.
           </p>
           <input
             type="tel"
-            placeholder="Phone (optional, 10 digits)"
+            placeholder="Phone (optional)"
             value={phone}
             onChange={(e) => setPhone(e.target.value.replace(/\D/g, "").slice(0, 10))}
             maxLength={10}
@@ -181,7 +186,6 @@ export default function SettingsPage() {
           >
             Save phone
           </button>
-          <p className="muted" style={{ fontSize: 12 }}>Daily peak nudge time</p>
           <div className="row" style={{ gap: 8 }}>
             <button type="button" className={peak === 16 ? "chip on" : "chip"} onClick={() => { setPeak(16); setPeakHour(16); }}>4 PM</button>
             <button type="button" className={peak === 18 ? "chip on" : "chip"} onClick={() => { setPeak(18); setPeakHour(18); }}>6 PM</button>
@@ -192,19 +196,19 @@ export default function SettingsPage() {
             onClick={async () => {
               if (!userId) return;
               const p = await ensureNotifyPermission();
-              if (p !== "granted") { setPushMsg("Allow notifications in browser settings"); return; }
+              if (p !== "granted") { setPushMsg("Allow notifications in browser"); return; }
               const ok = await registerPushSubscription(userId);
-              setPushMsg(ok ? "Push on — you'll get replies & calls" : "Push setup failed — try Install app first");
+              setPushMsg(ok ? "Push on" : "Push setup failed — try Install app first");
             }}
           >
-            Enable push notifications
+            Enable push
           </button>
           {pushMsg && <p className="muted" style={{ fontSize: 12 }}>{pushMsg}</p>}
         </div>
 
         <div className="card stack">
           <div className="h2">App update</div>
-          <p className="muted" style={{ fontSize: 12 }}>Version {APP_VERSION} · clears cache & reloads latest (no reinstall)</p>
+          <p className="muted" style={{ fontSize: 12 }}>Version {APP_VERSION}</p>
           <button
             className="btn btn-sm"
             type="button"
