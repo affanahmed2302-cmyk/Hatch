@@ -1,5 +1,5 @@
-export const APP_VERSION = '5.20.0'
-export const APP_BUILD = '2026-10-15-polish-oauth-blocks-compress'
+export const APP_VERSION = '5.21.0'
+export const APP_BUILD = '2026-10-15-ux-dedupe-splash'
 
 export async function checkForAppUpdate(): Promise<{
   updated: boolean
@@ -14,9 +14,7 @@ export async function checkForAppUpdate(): Promise<{
       const regs = await navigator.serviceWorker.getRegistrations()
       await Promise.all(regs.map((r) => r.update().catch(() => {})))
       for (const r of regs) {
-        if (r.waiting) {
-          r.waiting.postMessage({ type: 'SKIP_WAITING' })
-        }
+        if (r.waiting) r.waiting.postMessage({ type: 'SKIP_WAITING' })
       }
     }
     if ('caches' in window) {
@@ -24,16 +22,9 @@ export async function checkForAppUpdate(): Promise<{
       await Promise.all(keys.map((k) => caches.delete(k)))
     }
 
-    const prev = localStorage.getItem('hatch_app_version')
     localStorage.setItem('hatch_app_version', APP_VERSION)
     localStorage.setItem('hatch_app_build', APP_BUILD)
 
-    if (prev && prev !== APP_VERSION) {
-      return {
-        updated: true,
-        message: `Updated to ${APP_VERSION}. Reloading…`,
-      }
-    }
     return {
       updated: true,
       message: `You're on ${APP_VERSION}. Cache cleared — reloading…`,

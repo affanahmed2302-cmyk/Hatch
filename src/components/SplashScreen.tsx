@@ -2,21 +2,26 @@
 import { useEffect } from "react";
 import { playWordReveal, playOut } from "@/lib/splashSounds";
 
-const SESSION_KEY = "hatch_splash_v10";
-/** Short splash — aligns with real open time, not a long wait */
-const HOLD_MS = 420;
-const FADE_MS = 220;
+const SESSION_KEY = "hatch_splash_v11";
+const HOLD_MS = 520;
+const FADE_MS = 200;
 
 function hideBoot(boot: HTMLElement) {
   boot.classList.add("hatch-boot-out");
   boot.classList.add("hatch-boot-done");
   boot.setAttribute("aria-hidden", "true");
   boot.style.pointerEvents = "none";
+  try {
+    document.documentElement.classList.add("hatch-booted");
+  } catch {
+    /* */
+  }
   window.setTimeout(() => {
     boot.style.display = "none";
-  }, FADE_MS + 20);
+  }, FADE_MS + 30);
 }
 
+/** One splash per browser tab session — never double-flash */
 export default function SplashScreen() {
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -25,17 +30,23 @@ export default function SplashScreen() {
 
     let seen = false;
     try {
-      seen = !!sessionStorage.getItem(SESSION_KEY);
+      seen = sessionStorage.getItem(SESSION_KEY) === "1";
     } catch {
       /* */
     }
 
-    // Return visits: hide instantly so app feels instant
-    if (seen) {
+    if (seen || document.documentElement.classList.contains("hatch-booted")) {
       boot.style.display = "none";
       boot.setAttribute("aria-hidden", "true");
       boot.classList.add("hatch-boot-done");
+      document.documentElement.classList.add("hatch-booted");
       return;
+    }
+
+    try {
+      sessionStorage.setItem(SESSION_KEY, "1");
+    } catch {
+      /* */
     }
 
     boot.classList.add("hatch-boot-animate");
@@ -55,11 +66,6 @@ export default function SplashScreen() {
     }, HOLD_MS);
 
     const tHide = window.setTimeout(() => {
-      try {
-        sessionStorage.setItem(SESSION_KEY, "1");
-      } catch {
-        /* */
-      }
       hideBoot(boot);
     }, HOLD_MS + FADE_MS);
 

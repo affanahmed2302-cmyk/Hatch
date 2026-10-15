@@ -1,9 +1,12 @@
 "use client";
 import Link from "next/link";
-import SparksEntry from "./SparksEntry";
 
 type Mode = "professional" | "social" | "both";
 
+/**
+ * Home quick tiles — NEVER duplicate bottom Nav (Home / People / Lounge / Chat / You).
+ * Only unique destinations.
+ */
 export default function HomeModeGrids({
   mode,
   confessionOpen,
@@ -21,22 +24,17 @@ export default function HomeModeGrids({
   return (
     <>
       <p className="muted" style={{ fontSize: 11, marginBottom: 10 }}>
-        Mode: <strong style={{ color: "#e9d5ff" }}>{mode}</strong> · Settings
+        Mode: <strong style={{ color: "#e9d5ff" }}>{mode}</strong> · change in Settings
       </p>
 
       {showPro && (
         <>
-          <div className="section-label">Professional</div>
+          <div className="section-label">Career & time</div>
           <div className="quick-grid">
-            <Link href="/discover" className="quick-tile violet">
-              <span className="qt-ico">◎</span>
-              <div className="qt-title">Find people</div>
-              <div className="qt-sub">Skills · teams</div>
-            </Link>
             <Link href="/clubs" className="quick-tile emerald">
               <span className="qt-ico">✦</span>
               <div className="qt-title">Clubs</div>
-              <div className="qt-sub">Events · cores</div>
+              <div className="qt-sub">Events</div>
             </Link>
             <Link href="/schedule" className="quick-tile cyan">
               <span className="qt-ico">📅</span>
@@ -45,8 +43,13 @@ export default function HomeModeGrids({
             </Link>
             <Link href="/tools" className="quick-tile pink">
               <span className="qt-ico">◇</span>
-              <div className="qt-title">Opportunities</div>
-              <div className="qt-sub">Internships · tools</div>
+              <div className="qt-title">Tools</div>
+              <div className="qt-sub">Internships</div>
+            </Link>
+            <Link href="/discover" className="quick-tile violet">
+              <span className="qt-ico">◎</span>
+              <div className="qt-title">Teams</div>
+              <div className="qt-sub">Skills</div>
             </Link>
           </div>
         </>
@@ -54,27 +57,27 @@ export default function HomeModeGrids({
 
       {showSocial && (
         <>
-          <div className="section-label">Campus social</div>
+          <div className="section-label">Campus</div>
           <div className="quick-grid">
-            <Link href="/lounge" className="quick-tile pink">
-              <span className="qt-ico">◈</span>
-              <div className="qt-title">Lounge</div>
-              <div className="qt-sub">Open chat</div>
-            </Link>
-            <Link href="/inbox" className="quick-tile cyan">
-              <span className="qt-ico">◇</span>
-              <div className="qt-title">Messages</div>
-              <div className="qt-sub">DMs</div>
+            <Link href="/radar" className="quick-tile violet">
+              <span className="qt-ico">📡</span>
+              <div className="qt-title">Radar</div>
+              <div className="qt-sub">Nearby</div>
             </Link>
             <Link href="/hostel" className="quick-tile emerald">
               <span className="qt-ico">🏠</span>
               <div className="qt-title">Hostel</div>
               <div className="qt-sub">Needs</div>
             </Link>
-            <Link href="/radar" className="quick-tile violet">
-              <span className="qt-ico">📡</span>
-              <div className="qt-title">Radar</div>
-              <div className="qt-sub">Nearby</div>
+            <Link href="/pro" className="quick-tile cyan">
+              <span className="qt-ico">▣</span>
+              <div className="qt-title">Pro hub</div>
+              <div className="qt-sub">All career</div>
+            </Link>
+            <Link href="/social" className="quick-tile pink">
+              <span className="qt-ico">◈</span>
+              <div className="qt-title">Social hub</div>
+              <div className="qt-sub">Culture</div>
             </Link>
           </div>
           {confessionOpen && (
@@ -92,34 +95,31 @@ export default function HomeModeGrids({
             >
               <div style={{ fontWeight: 800, fontSize: 14 }}>🌙 Night notes</div>
               <p className="muted" style={{ fontSize: 12, marginTop: 4 }}>
-                Anonymous · open 10pm–5am
+                Anonymous · 10pm–5am
               </p>
             </Link>
           )}
         </>
       )}
 
-      <div className="row" style={{ gap: 8, marginBottom: 12 }}>
-        {showSocial && <SparksEntry />}
-        <button
-          type="button"
-          className="card"
-          onClick={onInvite}
-          style={{
-            flex: 1,
-            textAlign: "left",
-            marginBottom: 0,
-            cursor: "pointer",
-            border: "1px solid rgba(34,211,238,0.3)",
-            background: "linear-gradient(160deg,rgba(34,211,238,0.12),rgba(22,22,32,0.85))",
-          }}
-        >
-          <div style={{ fontWeight: 800, fontSize: 14 }}>↗ Invite</div>
-          <p className="muted" style={{ fontSize: 11, marginTop: 2 }}>
-            Share with classmates
-          </p>
-        </button>
-      </div>
+      <button
+        type="button"
+        className="card"
+        onClick={onInvite}
+        style={{
+          width: "100%",
+          textAlign: "left",
+          marginBottom: 12,
+          cursor: "pointer",
+          border: "1px solid rgba(34,211,238,0.3)",
+          background: "linear-gradient(160deg,rgba(34,211,238,0.12),rgba(22,22,32,0.85))",
+        }}
+      >
+        <div style={{ fontWeight: 800, fontSize: 14 }}>↗ Invite classmates</div>
+        <p className="muted" style={{ fontSize: 11, marginTop: 2 }}>
+          Grow your campus graph
+        </p>
+      </button>
       {inviteMsg && (
         <div className="ok" style={{ marginBottom: 10 }}>
           {inviteMsg}
