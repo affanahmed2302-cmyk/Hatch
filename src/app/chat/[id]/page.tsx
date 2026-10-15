@@ -4,8 +4,8 @@ import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { supabase, displayName, rateLimit } from "@/lib/supabase";
 import { haptic, playPing, bumpChatStreak, markMessagesRead, bumpDaily } from "@/lib/obsession";
-import { ensureNotifyPermission } from "@/lib/notify";
-import { startCall, callEmbedUrl, type CallRow } from "@/lib/calls";
+import { soundSend } from "@/lib/uiSounds";
+import { isBlockedEitherWay, blockUser } from "@/lib/blocks";
 
 type Msg = {
   id: string;
@@ -15,41 +15,45 @@ type Msg = {
   media_url?: string | null;
   media_type?: string | null;
   created_at: string;
-  read_at?: string | null;
+  _local?: boolean;
 };
 
-/** Clean DM — IG/WA style: name, text, voice, call. No clutter. */
+/** Fast DM — no Jitsi, no laggy call iframe. Message-first like IG. */
 export default function ChatPage() {
   const { id: peerId } = useParams<{ id: string }>();
   const [myId, setMyId] = useState<string | null>(null);
-  const [myName, setMyName] = useState("Hatch");
   const [peer, setPeer] = useState<any>(null);
   const [msgs, setMsgs] = useState<Msg[]>([]);
   const [text, setText] = useState("");
   const [loading, setLoading] = useState(true);
-  const [recording, setRecording] = useState(false);
-  const [callUrl, setCallUrl] = useState<string | null>(null);
-  const [callErr, setCallErr] = useState("");
-  const [online, setOnline] = useState(false);
+  const [blocked, setBlocked] = useState(false);
+  const [sending, setSending] = useState(false);
   const bottom = useRef<HTMLDivElement>(null);
-  const mediaRec = useRef<MediaRecorder | null>(null);
-  const chunks = useRef<Blob[]>([]);
   const router = useRouter();
 
-  const loadMsgs = useCallback(async (uid: string) => {
-    const { data } = await supabase
-      .from("messages")
-      .select("*")
-      .or(
-        `and(sender_id.eq.${uid},receiver_id.eq.${peerId}),and(sender_id.eq.${peerId},receiver_id.eq.${uid})`
-      )
-      .order("created_at", { ascending: true })
-      .limit(250);
-    setMsgs((data as Msg[]) || []);
-    setTimeout(() => bottom.current?.scrollIntoView({ behavior: "smooth" }), 40);
-  }, [peerId]);
+  const scrollEnd = useCallback(() => {
+    requestAnimationFrame(() => bottom.current?.scrollIntoView({ behavior: "smooth" }));
+  }, []);
+
+  const loadMsgs = useCallback(
+    async (uid: string) => {
+      const { data } = await supabase
+        .from("messages")
+        .select("id, sender_id, receiver_id, content, media_url, media_type, created_at")
+        .or(
+          `and(sender_id.eq.${uid},receiver_id.eq.${peerId}),and(sender_id.eq.${peerId},receiver_id.eq.${uid})`
+        )
+        .order("created_at", { ascending: false })
+        .limit(80);
+      const list = ((data as Msg[]) || []).slice().reverse();
+      setMsgs(list);
+      scrollEnd();
+    },
+    [peerId, scrollEnd]
+  );
 
   useEffect(() => {
+    let ch: ReturnType<typeof supabase.channel> | null = null;
     (async () => {
       const {
         data: { user },
@@ -59,152 +63,106 @@ export default function ChatPage() {
         return;
       }
       setMyId(user.id);
-      ensureNotifyPermission();
+
+      if (await isBlockedEitherWay(user.id, peerId)) {
+        setBlocked(true);
+        setLoading(false);
+        return;
+      }
 
       try {
         const q = new URLSearchParams(window.location.search);
-        if (q.get("call") === "1") {
-          const u = sessionStorage.getItem("hatch_active_call_url");
-          if (u) setCallUrl(u);
-        }
         const ctx = q.get("ctx");
         if (ctx) setText(decodeURIComponent(ctx).slice(0, 160));
       } catch {
         /* */
       }
 
-      const { data: me } = await supabase
-        .from("profiles")
-        .select("full_name, username, email")
-        .eq("id", user.id)
-        .maybeSingle();
-      setMyName(displayName(me || {}) || "Hatch");
-
-      // Always fetch name fields so header never says Unknown
       const { data: p } = await supabase
         .from("profiles")
         .select("id, full_name, username, email, avatar_url, last_seen, department")
         .eq("id", peerId)
         .maybeSingle();
       setPeer(p);
-      if (p?.last_seen) {
-        setOnline(Date.now() - new Date(p.last_seen).getTime() < 3 * 60 * 1000);
-      }
 
       await loadMsgs(user.id);
-      await markMessagesRead(user.id, peerId);
-      try {
-        await bumpChatStreak(user.id, peerId);
-      } catch {
-        /* */
-      }
+      markMessagesRead(user.id, peerId).catch(() => {});
       setLoading(false);
+
+      // Single lightweight realtime channel
+      ch = supabase
+        .channel("dm-" + [user.id, peerId].sort().join("-"))
+        .on(
+          "postgres_changes",
+          {
+            event: "INSERT",
+            schema: "public",
+            table: "messages",
+            filter: `receiver_id=eq.${user.id}`,
+          },
+          (payload) => {
+            const m = payload.new as Msg;
+            if (m.sender_id !== peerId) return;
+            setMsgs((prev) => {
+              if (prev.some((x) => x.id === m.id)) return prev;
+              return [...prev, m];
+            });
+            haptic(8);
+            playPing();
+            scrollEnd();
+            markMessagesRead(user.id, peerId).catch(() => {});
+          }
+        )
+        .subscribe();
     })();
-  }, [peerId, router, loadMsgs]);
 
-  useEffect(() => {
-    if (!myId || !peerId) return;
-    const room = "dm-" + [myId, peerId].sort().join("-");
-    const ch = supabase
-      .channel(room)
-      .on("postgres_changes", { event: "INSERT", schema: "public", table: "messages" }, async () => {
-        await loadMsgs(myId);
-        haptic(8);
-        playPing();
-      })
-      .subscribe();
     return () => {
-      supabase.removeChannel(ch);
+      if (ch) supabase.removeChannel(ch);
     };
-  }, [myId, peerId, loadMsgs]);
+  }, [peerId, router, loadMsgs, scrollEnd]);
 
-  async function send(body?: string) {
-    if (!myId) return;
-    const content = (body ?? text).trim();
+  async function send() {
+    if (!myId || sending) return;
+    const content = text.trim();
     if (!content) return;
-    if (!rateLimit("msg:" + myId, 50, 60000)) return;
+    if (!rateLimit("msg:" + myId, 40, 60000)) return;
+
     setText("");
-    await supabase.from("messages").insert({
+    setSending(true);
+    const tempId = "local-" + Date.now();
+    const optimistic: Msg = {
+      id: tempId,
       sender_id: myId,
       receiver_id: peerId,
       content,
-    });
-    await bumpDaily(myId, "messages");
-    await bumpChatStreak(myId, peerId);
-    await loadMsgs(myId);
-  }
-
-  async function startVoice() {
+      created_at: new Date().toISOString(),
+      _local: true,
+    };
+    setMsgs((prev) => [...prev, optimistic]);
+    scrollEnd();
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      const rec = new MediaRecorder(stream);
-      chunks.current = [];
-      rec.ondataavailable = (e) => {
-        if (e.data.size) chunks.current.push(e.data);
-      };
-      rec.onstop = async () => {
-        stream.getTracks().forEach((t) => t.stop());
-        const blob = new Blob(chunks.current, { type: "audio/webm" });
-        if (blob.size < 200 || !myId) return;
-        const path = `voice/${myId}/${Date.now()}.webm`;
-        const { error } = await supabase.storage.from("chat-media").upload(path, blob, {
-          contentType: "audio/webm",
-          upsert: false,
-        });
-        if (error) {
-          await send("🎤 Voice note");
-          return;
-        }
-        const { data: pub } = supabase.storage.from("chat-media").getPublicUrl(path);
-        await supabase.from("messages").insert({
-          sender_id: myId,
-          receiver_id: peerId,
-          content: "🎤 Voice note",
-          media_url: pub.publicUrl,
-          media_type: "audio",
-        });
-        await loadMsgs(myId);
-      };
-      mediaRec.current = rec;
-      rec.start();
-      setRecording(true);
-      haptic(12);
-    } catch {
-      setCallErr("Allow microphone for voice notes");
-    }
-  }
-
-  function stopVoice() {
-    try {
-      mediaRec.current?.stop();
+      soundSend();
     } catch {
       /* */
     }
-    setRecording(false);
-  }
 
-  async function doCall(type: "audio" | "video") {
-    if (!myId) return;
-    setCallErr("");
-    // Request mic/cam before joining — like WA
-    try {
-      await navigator.mediaDevices.getUserMedia({
-        audio: true,
-        video: type === "video",
-      }).then((s) => s.getTracks().forEach((t) => t.stop()));
-    } catch {
-      setCallErr("Allow mic" + (type === "video" ? " & camera" : "") + " to call");
+    const { data, error } = await supabase
+      .from("messages")
+      .insert({ sender_id: myId, receiver_id: peerId, content })
+      .select("id, sender_id, receiver_id, content, created_at")
+      .single();
+
+    if (error || !data) {
+      setMsgs((prev) => prev.filter((m) => m.id !== tempId));
+      setText(content);
+      setSending(false);
       return;
     }
-    const res = await startCall(myId, peerId, type);
-    if (!res.ok || !res.call) {
-      setCallErr(res.error || "Call failed");
-      return;
-    }
-    const url = callEmbedUrl(res.call as CallRow, myName);
-    setCallUrl(url);
-    sessionStorage.setItem("hatch_active_call_url", url);
-    sessionStorage.setItem("hatch_active_call_id", res.call.id);
+
+    setMsgs((prev) => prev.map((m) => (m.id === tempId ? { ...(data as Msg) } : m)));
+    bumpDaily(myId, "messages").catch(() => {});
+    bumpChatStreak(myId, peerId).catch(() => {});
+    setSending(false);
   }
 
   const peerName = displayName(peer || {});
@@ -217,44 +175,21 @@ export default function ChatPage() {
     );
   }
 
-  // Full-screen call — no extra login, just End (WA style)
-  if (callUrl) {
+  if (blocked) {
     return (
-      <div className="shell" style={{ padding: 0, height: "100dvh", display: "flex", flexDirection: "column" }}>
-        <div
-          className="topbar"
-          style={{
-            background: "linear-gradient(90deg,rgba(16,185,129,0.25),rgba(139,92,246,0.2))",
-          }}
-        >
-          <div style={{ flex: 1, minWidth: 0 }}>
-            <div style={{ fontWeight: 800, fontSize: 15 }}>{peerName}</div>
-            <div className="muted" style={{ fontSize: 11 }}>In call · stay on this screen</div>
-          </div>
-          <button
-            className="btn btn-sm"
-            style={{ background: "#f43f5e", color: "#fff" }}
-            onClick={() => {
-              setCallUrl(null);
-              sessionStorage.removeItem("hatch_active_call_url");
-            }}
-          >
-            End
-          </button>
-        </div>
-        <iframe
-          title="call"
-          src={callUrl}
-          style={{ flex: 1, width: "100%", border: 0, background: "#000" }}
-          allow="camera; microphone; fullscreen; autoplay; display-capture"
-        />
+      <div className="shell" style={{ padding: 24 }}>
+        <Link href="/inbox" className="btn-ghost btn-sm">
+          ← Inbox
+        </Link>
+        <p className="muted" style={{ marginTop: 24, textAlign: "center" }}>
+          This chat isn&apos;t available.
+        </p>
       </div>
     );
   }
 
   return (
     <div className="shell" style={{ display: "flex", flexDirection: "column", height: "100dvh" }}>
-      {/* Header — name always visible */}
       <div className="topbar" style={{ gap: 10 }}>
         <Link href="/inbox" className="btn-ghost btn-sm" style={{ padding: "8px 10px" }}>
           ←
@@ -280,7 +215,6 @@ export default function ChatPage() {
               background: peer?.avatar_url
                 ? `url(${peer.avatar_url}) center/cover`
                 : "linear-gradient(135deg,#8b5cf6,#ec4899)",
-              boxShadow: online ? "0 0 0 2px #34d399" : undefined,
             }}
           />
           <div style={{ minWidth: 0 }}>
@@ -296,41 +230,32 @@ export default function ChatPage() {
               {peerName}
             </div>
             <div className="muted" style={{ fontSize: 11 }}>
-              {online ? "Active now" : peer?.department || "Campus"}
+              {peer?.department || "Campus"}
             </div>
           </div>
         </Link>
-        <button type="button" className="btn-ghost btn-sm" aria-label="Audio call" onClick={() => doCall("audio")}>
-          📞
-        </button>
-        <button type="button" className="btn-ghost btn-sm" aria-label="Video call" onClick={() => doCall("video")}>
-          📹
-        </button>
+        {myId && (
+          <button
+            type="button"
+            className="btn-ghost btn-sm"
+            style={{ fontSize: 11, color: "#fb7185" }}
+            onClick={async () => {
+              if (!confirm(`Block ${peerName}?`)) return;
+              await blockUser(myId, peerId);
+              setBlocked(true);
+            }}
+          >
+            Block
+          </button>
+        )}
       </div>
 
-      {callErr && (
-        <div className="fail" style={{ margin: "8px 12px", fontSize: 12 }}>
-          {callErr}
-        </div>
-      )}
-
-      <div style={{ flex: 1, overflowY: "auto", padding: "12px 14px" }}>
+      <div style={{ flex: 1, overflowY: "auto", padding: "12px 14px", WebkitOverflowScrolling: "touch" }}>
         {msgs.length === 0 && (
           <div style={{ textAlign: "center", padding: "48px 16px" }}>
-            <div
-              style={{
-                width: 72,
-                height: 72,
-                borderRadius: "50%",
-                margin: "0 auto 12px",
-                background: peer?.avatar_url
-                  ? `url(${peer.avatar_url}) center/cover`
-                  : "linear-gradient(135deg,#8b5cf6,#ec4899)",
-              }}
-            />
             <div style={{ fontWeight: 800, fontSize: 17 }}>{peerName}</div>
             <p className="muted" style={{ fontSize: 13, marginTop: 6 }}>
-              Say hi — keep it real, keep it campus
+              Say hi — keep it real
             </p>
           </div>
         )}
@@ -340,20 +265,15 @@ export default function ChatPage() {
             <div
               key={m.id}
               className={mine ? "bubble-me" : "bubble-them"}
-              style={{ marginBottom: 6 }}
+              style={{ marginBottom: 6, opacity: m._local ? 0.7 : 1 }}
             >
-              {m.media_type === "audio" && m.media_url ? (
-                <audio controls src={m.media_url} style={{ maxWidth: 220, height: 36 }} />
-              ) : (
-                <span style={{ whiteSpace: "pre-wrap" }}>{m.content}</span>
-              )}
+              <span style={{ whiteSpace: "pre-wrap" }}>{m.content}</span>
             </div>
           );
         })}
         <div ref={bottom} />
       </div>
 
-      {/* Composer — only essentials */}
       <div
         style={{
           padding: "10px 12px calc(10px + env(safe-area-inset-bottom))",
@@ -361,28 +281,13 @@ export default function ChatPage() {
           display: "flex",
           gap: 8,
           alignItems: "center",
-          background: "rgba(7,7,12,0.92)",
+          background: "rgba(7,7,12,0.95)",
         }}
       >
-        <button
-          type="button"
-          className="btn-ghost btn-sm"
-          style={{
-            width: 42,
-            height: 42,
-            borderRadius: "50%",
-            padding: 0,
-            background: recording ? "rgba(244,63,94,0.25)" : undefined,
-          }}
-          onClick={() => (recording ? stopVoice() : startVoice())}
-          aria-label={recording ? "Stop recording" : "Voice note"}
-        >
-          {recording ? "⏹" : "🎤"}
-        </button>
         <input
           value={text}
           onChange={(e) => setText(e.target.value)}
-          placeholder={recording ? "Recording…" : "Message"}
+          placeholder="Message"
           style={{
             flex: 1,
             borderRadius: 22,
@@ -390,14 +295,18 @@ export default function ChatPage() {
             background: "rgba(255,255,255,0.06)",
             border: "1px solid rgba(255,255,255,0.08)",
           }}
-          onKeyDown={(e) => e.key === "Enter" && !e.shiftKey && send()}
-          disabled={recording}
+          onKeyDown={(e) => {
+            if (e.key === "Enter" && !e.shiftKey) {
+              e.preventDefault();
+              void send();
+            }
+          }}
         />
         <button
           className="btn btn-sm"
           style={{ borderRadius: "50%", width: 44, height: 44, padding: 0 }}
-          onClick={() => send()}
-          disabled={!text.trim() || recording}
+          onClick={() => void send()}
+          disabled={!text.trim() || sending}
           aria-label="Send"
         >
           ↑
