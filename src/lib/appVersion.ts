@@ -1,5 +1,5 @@
-export const APP_VERSION = '5.19.0'
-export const APP_BUILD = '2026-10-15-dual-mode-arch'
+export const APP_VERSION = '5.20.0'
+export const APP_BUILD = '2026-10-15-polish-oauth-blocks-compress'
 
 export async function checkForAppUpdate(): Promise<{
   updated: boolean
@@ -36,7 +36,7 @@ export async function checkForAppUpdate(): Promise<{
     }
     return {
       updated: true,
-      message: `You're on ${APP_VERSION}. Cache cleared — reloading fresh build…`,
+      message: `You're on ${APP_VERSION}. Cache cleared — reloading…`,
     }
   } catch (e: any) {
     return { updated: false, message: e?.message || 'Update check failed' }
