@@ -6,6 +6,7 @@ import NotifyPrompt from "./NotifyPrompt";
 import PilotButton from "./PilotButton";
 import SplashScreen from "./SplashScreen";
 import ErrorBoundary from "./ErrorBoundary";
+import GlobalErrorOverlay from "./GlobalErrorOverlay";
 import OfflineBanner from "./OfflineBanner";
 import ThemePreview from "./ThemePreview";
 import { supabase } from "@/lib/supabase";
@@ -13,9 +14,8 @@ import { registerPushSubscription } from "@/lib/pushClient";
 import { maybeDailyPeakNudge } from "@/lib/dailyNudge";
 import { APP_VERSION } from "@/lib/appVersion";
 
-const RECOVERY_KEY = "hatch_sw_recovery_v8";
+const RECOVERY_KEY = "hatch_sw_recovery_v9";
 
-/** Unregister every SW + wipe caches once after a bad deploy poisoned the phone */
 async function forceCleanClient() {
   try {
     if ("serviceWorker" in navigator) {
@@ -56,7 +56,7 @@ export default function Providers({ children }: { children: React.ReactNode }) {
       }
 
       if ("serviceWorker" in navigator) {
-        navigator.serviceWorker.register("/sw.js?v=8").catch(() => {});
+        navigator.serviceWorker.register("/sw.js?v=9").catch(() => {});
       }
 
       try {
@@ -83,20 +83,8 @@ export default function Providers({ children }: { children: React.ReactNode }) {
     };
     document.addEventListener("visibilitychange", onVis);
 
-    const onErr = () => {
-      try {
-        sessionStorage.setItem("hatch_client_crash", "1");
-      } catch {
-        /* */
-      }
-    };
-    window.addEventListener("error", onErr);
-    window.addEventListener("unhandledrejection", onErr);
-
     return () => {
       document.removeEventListener("visibilitychange", onVis);
-      window.removeEventListener("error", onErr);
-      window.removeEventListener("unhandledrejection", onErr);
     };
   }, []);
 
@@ -110,6 +98,7 @@ export default function Providers({ children }: { children: React.ReactNode }) {
       <NotifyPrompt />
       <InstallBanner />
       <PilotButton />
+      <GlobalErrorOverlay />
     </ErrorBoundary>
   );
 }

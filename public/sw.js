@@ -1,5 +1,5 @@
-/* Hatch SW v8 — network-first, never poison /_next after broken deploys */
-const CACHE = "hatch-static-v8";
+/* Hatch SW v9 — network-first */
+const CACHE = "hatch-static-v9";
 
 self.addEventListener("install", (event) => {
   self.skipWaiting();
@@ -68,8 +68,8 @@ self.addEventListener("push", (event) => {
   event.waitUntil(
     self.registration.showNotification(data.title || "Hatch", {
       body: data.body || "",
-      icon: "/icon.svg?v=energy-h-v8",
-      badge: "/icon.svg?v=energy-h-v8",
+      icon: "/icon.svg?v=energy-h-v9",
+      badge: "/icon.svg?v=energy-h-v9",
       data: { url: data.url || "/home" },
       requireInteraction: true,
     })
