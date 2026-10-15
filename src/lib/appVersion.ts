@@ -1,5 +1,5 @@
-export const APP_VERSION = '5.22.0'
-export const APP_BUILD = '2026-10-15-no-jitsi-fast-chat'
+export const APP_VERSION = '5.23.0'
+export const APP_BUILD = '2026-10-15-rescue-p1-nav-confess-circles'
 
 export async function checkForAppUpdate(): Promise<{ updated: boolean; message: string }> {
   if (typeof window === 'undefined') return { updated: false, message: 'Not in browser' }

@@ -12,7 +12,7 @@ export type FeatureKey =
   | 'feature_club_events'
   | 'maintenance_mode'
 
-/** Sparks/Circles OFF by default for official presentations */
+/** Circles (feature_sparks) OFF by default until founder enables in Pilot */
 const DEFAULTS: Record<FeatureKey, boolean> = {
   feature_sparks: false,
   dating_app_active: false,
@@ -38,21 +38,19 @@ export async function getFeatureFlags(): Promise<Record<FeatureKey, boolean>> {
   } catch {
     /* missing table → defaults */
   }
-  const sparksOn = !!(out.feature_sparks && out.dating_app_active)
-  out.feature_sparks = sparksOn
-  out.dating_app_active = sparksOn
+  // Circles = feature_sparks only (no dual AND with dating_app_active)
+  // dating_app_active kept as alias for admin UI compatibility
+  out.dating_app_active = out.feature_sparks
   return out
 }
 
 export async function isFeatureOn(key: FeatureKey): Promise<boolean> {
   const flags = await getFeatureFlags()
-  if (key === 'feature_sparks' || key === 'dating_app_active') {
-    return !!(flags.feature_sparks && flags.dating_app_active)
-  }
+  if (key === 'dating_app_active') return !!flags.feature_sparks
   return !!flags[key]
 }
 
-/** Internal flag only — UI never says "dating" */
+/** Internal flag — UI never says "dating" */
 export async function isDatingAppActive(): Promise<boolean> {
   return isFeatureOn('feature_sparks')
 }
@@ -69,7 +67,7 @@ export async function setFeatureFlag(
   key: FeatureKey,
   enabled: boolean,
   adminEmail?: string | null,
-  adminId?: string | null
+  _adminId?: string | null
 ) {
   if (!isSuperAdmin(adminEmail)) return { ok: false as const, error: 'Super-admin only' }
   try {
@@ -84,7 +82,6 @@ export async function setFeatureFlag(
           key: k,
           value: enabled ? 'true' : 'false',
           updated_at: new Date().toISOString(),
-          updated_by: adminId || null,
         },
         { onConflict: 'key' }
       )
@@ -96,7 +93,7 @@ export async function setFeatureFlag(
   }
 }
 
-/** Default confession window: 10pm (22) → 5am (5) local, overnight */
+/** Configurable window — default 22:00–05:00 local browser time (Asia/Kolkata for BMSCE users) */
 export async function getConfessionWindow(): Promise<{ start: number; end: number }> {
   let start = 22
   let end = 5
@@ -121,11 +118,11 @@ export async function setConfessionWindow(
   start: number,
   end: number,
   adminEmail?: string | null,
-  adminId?: string | null
+  _adminId?: string | null
 ) {
   if (!isSuperAdmin(adminEmail)) return { ok: false as const, error: 'Super-admin only' }
-  const s = Math.min(23, Math.max(0, Math.floor(start)))
-  const e = Math.min(23, Math.max(0, Math.floor(end)))
+  const s = Math.max(0, Math.min(23, start))
+  const e = Math.max(0, Math.min(23, end))
   try {
     for (const [key, value] of [
       ['confession_window_start', String(s)],
@@ -136,104 +133,38 @@ export async function setConfessionWindow(
           key,
           value,
           updated_at: new Date().toISOString(),
-          updated_by: adminId || null,
         },
         { onConflict: 'key' }
       )
       if (error) return { ok: false as const, error: error.message }
     }
     return { ok: true as const, error: null }
-  } catch (err: any) {
-    return { ok: false as const, error: err?.message || 'Failed' }
+  } catch (e: any) {
+    return { ok: false as const, error: e?.message || 'Failed' }
   }
 }
 
-/** Open 10pm–5am local by default (overnight window) */
 export async function isConfessionOpenNow(): Promise<boolean> {
   if (!(await isFeatureOn('feature_confessions'))) return false
   const { start, end } = await getConfessionWindow()
-  const h = new Date().getHours()
+  // Use Asia/Kolkata hour for BMSCE (configurable later via TZ setting)
+  const h = Number(
+    new Intl.DateTimeFormat('en-IN', {
+      hour: 'numeric',
+      hour12: false,
+      timeZone: 'Asia/Kolkata',
+    }).format(new Date())
+  )
   if (start === end) return true
   if (start < end) return h >= start && h < end
-  // overnight e.g. 22 → 5
   return h >= start || h < end
 }
 
-export async function fetchAdminReports(limit = 40) {
-  try {
-    const { data, error } = await supabase
-      .from('reports')
-      .select('id, reporter_id, reported_id, reason, details, created_at, status')
-      .order('created_at', { ascending: false })
-      .limit(limit)
-    if (error || !data) return []
-    const ids = [...new Set(data.flatMap((r) => [r.reporter_id, r.reported_id]))]
-    const { data: profs } = await supabase
-      .from('profiles')
-      .select('id, full_name, username, email')
-      .in('id', ids)
-    const map = Object.fromEntries((profs || []).map((p: any) => [p.id, p]))
-    return data.map((r) => ({
-      ...r,
-      reporter: map[r.reporter_id],
-      reported: map[r.reported_id],
-    }))
-  } catch {
-    return []
+export function formatWindowLabel(start: number, end: number): string {
+  const fmt = (n: number) => {
+    const h = n % 12 || 12
+    const ap = n < 12 ? 'am' : 'pm'
+    return `${h}${ap}`
   }
-}
-
-export async function fetchAdminMetrics() {
-  const empty = {
-    users: 0,
-    messages: 0,
-    premiumPending: 0,
-    clubEvents: 0,
-    sparksProfiles: 0,
-    flags: await getFeatureFlags(),
-  }
-  try {
-    const [u, m, p, c, s] = await Promise.all([
-      supabase.from('profiles').select('id', { count: 'exact', head: true }),
-      supabase.from('messages').select('id', { count: 'exact', head: true }),
-      supabase
-        .from('premium_requests')
-        .select('id', { count: 'exact', head: true })
-        .eq('status', 'pending'),
-      supabase.from('club_events').select('id', { count: 'exact', head: true }),
-      supabase.from('sparks_profiles').select('user_id', { count: 'exact', head: true }),
-    ])
-    return {
-      users: u.count || 0,
-      messages: m.count || 0,
-      premiumPending: p.count || 0,
-      clubEvents: c.count || 0,
-      sparksProfiles: s.count || 0,
-      flags: await getFeatureFlags(),
-    }
-  } catch {
-    return empty
-  }
-}
-
-export function assistantCeoAdvice(m: {
-  users: number
-  messages: number
-  premiumPending: number
-  clubEvents: number
-  sparksProfiles: number
-  flags: Record<string, boolean>
-}): string[] {
-  const tips: string[] = []
-  if (m.users < 50) tips.push('Push offline invites in class groups — target 50 verified accounts this week.')
-  if (m.messages < m.users * 2) tips.push('Prompt Free-now pings — chat volume is low vs users.')
-  if (m.premiumPending > 5) tips.push('Clear pending premium UTRs in Pilot → Commerce.')
-  if (m.flags.feature_sparks) {
-    if (m.sparksProfiles < 10) tips.push('Circles is ON but few profiles — soft invite classmates.')
-  }
-  if (!m.flags.feature_confessions) tips.push('Night notes (confessions) are OFF.')
-  if (!m.flags.feature_club_portal) tips.push('Club portal is OFF.')
-  if (m.clubEvents === 0) tips.push('No club events yet — onboard club leads via Pilot.')
-  if (!tips.length) tips.push('Metrics healthy — double down on weekly campus drops.')
-  return tips
+  return `${fmt(start)}–${fmt(end)} IST`
 }

@@ -3,13 +3,17 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
-import { isConfessionOpenNow, getConfessionWindow } from "@/lib/features";
+import {
+  isConfessionOpenNow,
+  getConfessionWindow,
+  formatWindowLabel,
+} from "@/lib/features";
 import Nav from "@/components/Nav";
 
-/** Anonymous night notes — college-safe (not marketed as dating). Window 10pm–5am. */
-export default function NightNotesPage() {
+/** Confessions — anonymous campus posts. Schedule from app_settings (default 22–5 IST). */
+export default function ConfessionsPage() {
   const [open, setOpen] = useState(false);
-  const [windowLabel, setWindowLabel] = useState("10pm–5am");
+  const [windowLabel, setWindowLabel] = useState("10pm–5am IST");
   const [text, setText] = useState("");
   const [list, setList] = useState<any[]>([]);
   const [msg, setMsg] = useState("");
@@ -42,15 +46,15 @@ export default function NightNotesPage() {
       setUid(user.id);
       setOpen(await isConfessionOpenNow());
       const w = await getConfessionWindow();
-      setWindowLabel(`${w.start}:00–${w.end}:00`);
+      setWindowLabel(formatWindowLabel(w.start, w.end));
       await load();
     })();
   }, [router]);
 
   async function post() {
     if (!uid || !text.trim()) return;
-    if (!open) {
-      setErr("Night notes open 10pm–5am only");
+    if (!(await isConfessionOpenNow())) {
+      setErr("Confessions is closed right now");
       return;
     }
     const { error } = await supabase.from("confessions").insert({
@@ -74,17 +78,17 @@ export default function NightNotesPage() {
   return (
     <div className="shell">
       <div className="topbar">
-        <Link href="/home" className="btn-ghost btn-sm">
+        <Link href="/more" className="btn-ghost btn-sm">
           ←
         </Link>
         <div className="logo" style={{ fontSize: 16 }}>
-          Night notes
+          Confessions
         </div>
       </div>
       <div className="page">
         <p className="muted" style={{ fontSize: 13, marginBottom: 12, lineHeight: 1.45 }}>
-          Anonymous campus notes · open{" "}
-          <strong style={{ color: "#e9d5ff" }}>{windowLabel}</strong> local time. Be kind.
+          Anonymous campus confessions · open{" "}
+          <strong style={{ color: "#e9d5ff" }}>{windowLabel}</strong>. Be kind. No doxxing.
         </p>
         {msg && (
           <div className="ok" style={{ marginBottom: 10 }}>
@@ -100,7 +104,7 @@ export default function NightNotesPage() {
           <div className="card" style={{ marginBottom: 12, border: "1px solid rgba(251,191,36,0.3)" }}>
             <div style={{ fontWeight: 700 }}>Closed right now</div>
             <p className="muted" style={{ fontSize: 12, marginTop: 4 }}>
-              Come back between 10pm and 5am.
+              Posting opens {windowLabel}. You can still read recent posts.
             </p>
           </div>
         )}
@@ -128,9 +132,10 @@ export default function NightNotesPage() {
         ))}
         {list.length === 0 && (
           <p className="muted" style={{ textAlign: "center", marginTop: 24 }}>
-            No notes yet tonight
+            No confessions yet
           </p>
         )}
+        <div style={{ height: 88 }} />
       </div>
       <Nav />
     </div>

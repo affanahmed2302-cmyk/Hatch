@@ -3,9 +3,7 @@ import Link from "next/link";
 
 type Mode = "professional" | "social" | "both";
 
-/**
- * ONLY unique tools — never People / Lounge / Chat / Home (those are bottom nav only).
- */
+/** Home shows next actions only — full menu lives in More (nav) */
 export default function HomeModeGrids({
   mode,
   confessionOpen,
@@ -17,62 +15,34 @@ export default function HomeModeGrids({
   onInvite: () => void;
   inviteMsg?: string;
 }) {
-  const showPro = mode === "professional" || mode === "both";
-  const showSocial = mode === "social" || mode === "both";
-
+  void mode;
   return (
     <>
-      {(showPro || showSocial) && (
-        <>
-          <div className="section-label">More on campus</div>
-          <div className="quick-grid" style={{ marginBottom: 8 }}>
-            {showPro && (
-              <>
-                <Link href="/clubs" className="quick-tile emerald">
-                  <span className="qt-ico">✦</span>
-                  <div className="qt-title">Clubs</div>
-                  <div className="qt-sub">Rank · events</div>
-                </Link>
-                <Link href="/schedule" className="quick-tile cyan">
-                  <span className="qt-ico">📅</span>
-                  <div className="qt-title">Schedule</div>
-                  <div className="qt-sub">Classes</div>
-                </Link>
-              </>
-            )}
-            {showSocial && (
-              <>
-                <Link href="/hostel" className="quick-tile pink">
-                  <span className="qt-ico">🏠</span>
-                  <div className="qt-title">Hostel life</div>
-                  <div className="qt-sub">Hang · needs</div>
-                </Link>
-                <Link href="/sparks" className="quick-tile violet">
-                  <span className="qt-ico">◎</span>
-                  <div className="qt-title">Circles</div>
-                  <div className="qt-sub">Classmates</div>
-                </Link>
-              </>
-            )}
-            {!showSocial && showPro && (
-              <>
-                <Link href="/tools" className="quick-tile pink">
-                  <span className="qt-ico">◇</span>
-                  <div className="qt-title">Tools</div>
-                  <div className="qt-sub">Internships</div>
-                </Link>
-                <Link href="/sparks" className="quick-tile violet">
-                  <span className="qt-ico">◎</span>
-                  <div className="qt-title">Circles</div>
-                  <div className="qt-sub">Classmates</div>
-                </Link>
-              </>
-            )}
-          </div>
-        </>
-      )}
+      <div className="section-label">Next steps</div>
+      <div className="quick-grid" style={{ marginBottom: 12 }}>
+        <Link href="/discover" className="quick-tile violet">
+          <span className="qt-ico">◎</span>
+          <div className="qt-title">Discover</div>
+          <div className="qt-sub">People</div>
+        </Link>
+        <Link href="/more" className="quick-tile cyan">
+          <span className="qt-ico">☰</span>
+          <div className="qt-title">More</div>
+          <div className="qt-sub">Clubs · tools</div>
+        </Link>
+        <Link href="/clubs" className="quick-tile emerald">
+          <span className="qt-ico">✦</span>
+          <div className="qt-title">Clubs</div>
+          <div className="qt-sub">Campus</div>
+        </Link>
+        <Link href="/teams" className="quick-tile pink">
+          <span className="qt-ico">⬡</span>
+          <div className="qt-title">Teams</div>
+          <div className="qt-sub">Projects</div>
+        </Link>
+      </div>
 
-      {confessionOpen && showSocial && (
+      {confessionOpen && (
         <Link
           href="/confessions"
           className="card"
@@ -84,8 +54,8 @@ export default function HomeModeGrids({
             border: "1px solid rgba(167,139,250,0.35)",
           }}
         >
-          <div style={{ fontWeight: 800, fontSize: 14 }}>🌙 Night notes</div>
-          <p className="muted" style={{ fontSize: 12 }}>Anonymous · 10pm–5am</p>
+          <div style={{ fontWeight: 800, fontSize: 14 }}>Confessions · open now</div>
+          <p className="muted" style={{ fontSize: 12 }}>Anonymous · scheduled window</p>
         </Link>
       )}
 
@@ -97,7 +67,11 @@ export default function HomeModeGrids({
       >
         ↗ Invite classmates
       </button>
-      {inviteMsg && <div className="ok" style={{ marginBottom: 10 }}>{inviteMsg}</div>}
+      {inviteMsg && (
+        <div className="ok" style={{ marginBottom: 10 }}>
+          {inviteMsg}
+        </div>
+      )}
     </>
   );
 }

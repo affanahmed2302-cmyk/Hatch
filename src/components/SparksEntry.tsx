@@ -3,7 +3,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { isCirclesActive } from "@/lib/features";
 
-/** Official-safe: classmate connections for projects, fests, study — never "dating" in UI */
+/** Only render when Circles is ON — never a dead "offline" tease on Home */
 export default function SparksEntry() {
   const [on, setOn] = useState(false);
   useEffect(() => {
@@ -24,7 +24,7 @@ export default function SparksEntry() {
     >
       <div style={{ fontWeight: 800, fontSize: 14 }}>◎ Campus Circles</div>
       <p className="muted" style={{ fontSize: 12, marginTop: 4 }}>
-        Meet verified classmates for projects, fests &amp; study groups · optional
+        Meet classmates for projects, fests &amp; study · optional
       </p>
     </Link>
   );

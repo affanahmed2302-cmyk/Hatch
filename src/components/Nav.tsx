@@ -2,12 +2,13 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
+/** Canonical mobile IA — no duplicates with Home body */
 const items = [
   { href: "/home", label: "Home", icon: "⌂" },
-  { href: "/discover", label: "People", icon: "◎" },
+  { href: "/discover", label: "Discover", icon: "◎" },
   { href: "/lounge", label: "Lounge", icon: "◈" },
-  { href: "/inbox", label: "Chat", icon: "◇" },
-  { href: "/profile", label: "You", icon: "●" },
+  { href: "/inbox", label: "Chats", icon: "◇" },
+  { href: "/more", label: "More", icon: "☰" },
 ];
 
 export default function Nav() {
@@ -16,11 +17,10 @@ export default function Nav() {
     path.startsWith("/chat/") ||
     path === "/lounge" ||
     path.startsWith("/lounge/") ||
-    path.startsWith("/sparks") ||
-    path === "/pilot" ||
     path.startsWith("/login") ||
     path.startsWith("/signup") ||
-    path.startsWith("/onboarding");
+    path.startsWith("/onboarding") ||
+    path.startsWith("/auth");
 
   if (hide) return null;
 
