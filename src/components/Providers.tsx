@@ -13,7 +13,7 @@ import { registerPushSubscription } from "@/lib/pushClient";
 import { maybeDailyPeakNudge } from "@/lib/dailyNudge";
 import { APP_VERSION } from "@/lib/appVersion";
 
-const RECOVERY_KEY = "hatch_sw_recovery_v7";
+const RECOVERY_KEY = "hatch_sw_recovery_v8";
 
 /** Unregister every SW + wipe caches once after a bad deploy poisoned the phone */
 async function forceCleanClient() {
@@ -40,7 +40,6 @@ export default function Providers({ children }: { children: React.ReactNode }) {
         const prev = localStorage.getItem("hatch_app_version");
         localStorage.setItem("hatch_app_version", APP_VERSION);
 
-        // First load on this version after a string of ERROR deploys: wipe SW once
         if (prev && prev !== APP_VERSION && !sessionStorage.getItem(RECOVERY_KEY)) {
           sessionStorage.setItem(RECOVERY_KEY, "1");
           await forceCleanClient();
@@ -48,7 +47,6 @@ export default function Providers({ children }: { children: React.ReactNode }) {
           return;
         }
 
-        // Also recover if a prior crash left a flag
         if (sessionStorage.getItem("hatch_client_crash") === "1") {
           sessionStorage.removeItem("hatch_client_crash");
           await forceCleanClient();
@@ -58,7 +56,7 @@ export default function Providers({ children }: { children: React.ReactNode }) {
       }
 
       if ("serviceWorker" in navigator) {
-        navigator.serviceWorker.register("/sw.js?v=7").catch(() => {});
+        navigator.serviceWorker.register("/sw.js?v=8").catch(() => {});
       }
 
       try {
@@ -85,7 +83,6 @@ export default function Providers({ children }: { children: React.ReactNode }) {
     };
     document.addEventListener("visibilitychange", onVis);
 
-    // Catch unhandled chunk / render crashes → mark for next-load recovery
     const onErr = () => {
       try {
         sessionStorage.setItem("hatch_client_crash", "1");
