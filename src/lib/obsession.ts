@@ -1,179 +1,206 @@
 import { supabase } from './supabase'
+import { computeLeaderScore } from './profileRank'
 
 export function haptic(pattern: number | number[] = 12) {
   try {
     if (typeof navigator !== 'undefined' && navigator.vibrate) navigator.vibrate(pattern)
-  } catch {}
+  } catch {
+    /* */
+  }
 }
 
 export function playPing() {
   try {
-    const Ctx = window.AudioContext || (window as any).webkitAudioContext
-    if (!Ctx) return
-    const ctx = new Ctx()
+    const AC = typeof window !== 'undefined' && (window.AudioContext || (window as any).webkitAudioContext)
+    if (!AC) return
+    const ctx = new AC()
     const o = ctx.createOscillator()
     const g = ctx.createGain()
-    o.connect(g); g.connect(ctx.destination)
     o.frequency.value = 880
-    g.gain.value = 0.08
+    g.gain.value = 0.04
+    o.connect(g)
+    g.connect(ctx.destination)
     o.start()
-    g.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.15)
-    o.stop(ctx.currentTime + 0.15)
-  } catch {}
+    o.stop(ctx.currentTime + 0.08)
+  } catch {
+    /* */
+  }
 }
 
 export async function bumpChatStreak(userA: string, userB: string) {
   try {
-    const [a, b] = userA < userB ? [userA, userB] : [userB, userA]
-    const today = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' })
-    const { data: row } = await supabase.from('chat_streaks').select('*').eq('user_a', a).eq('user_b', b).maybeSingle()
-    if (!row) {
-      await supabase.from('chat_streaks').insert({ user_a: a, user_b: b, streak_count: 1, last_message_date: today })
-      return 1
-    }
-    if (row.last_message_date === today) return row.streak_count
-    const last = new Date(row.last_message_date)
-    const t = new Date(today)
-    const diff = Math.round((t.getTime() - last.getTime()) / 86400000)
-    const next = diff === 1 ? (row.streak_count || 0) + 1 : 1
-    await supabase.from('chat_streaks').update({ streak_count: next, last_message_date: today }).eq('id', row.id)
-    return next
-  } catch { return 0 }
+    const [a, b] = [userA, userB].sort()
+    const key = `${a}:${b}`
+    const { data } = await supabase.from('chat_streaks').select('*').eq('pair_key', key).maybeSingle()
+    const next = (data?.count || 0) + 1
+    await supabase.from('chat_streaks').upsert({ pair_key: key, user_a: a, user_b: b, count: next, updated_at: new Date().toISOString() })
+  } catch {
+    /* optional table */
+  }
 }
 
 export async function getChatStreak(userA: string, userB: string) {
   try {
-    const [a, b] = userA < userB ? [userA, userB] : [userB, userA]
-    const { data } = await supabase.from('chat_streaks').select('streak_count').eq('user_a', a).eq('user_b', b).maybeSingle()
-    return data?.streak_count || 0
-  } catch { return 0 }
+    const [a, b] = [userA, userB].sort()
+    const { data } = await supabase.from('chat_streaks').select('count').eq('pair_key', `${a}:${b}`).maybeSingle()
+    return data?.count || 0
+  } catch {
+    return 0
+  }
 }
 
 export async function markMessagesRead(myId: string, peerId: string) {
   try {
-    await supabase.from('messages').update({ read_at: new Date().toISOString() })
-      .eq('sender_id', peerId).eq('receiver_id', myId).is('read_at', null)
-  } catch {}
+    await supabase
+      .from('messages')
+      .update({ read_at: new Date().toISOString() })
+      .eq('receiver_id', myId)
+      .eq('sender_id', peerId)
+      .is('read_at', null)
+  } catch {
+    /* */
+  }
 }
 
 export async function recordProfileView(viewerId: string, viewedId: string) {
   if (viewerId === viewedId) return
   try {
     await supabase.from('profile_views').insert({ viewer_id: viewerId, viewed_id: viewedId })
-    const today = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' })
-    const { data } = await supabase.from('daily_activity').select('id, views_received').eq('user_id', viewedId).eq('activity_date', today).maybeSingle()
-    if (data) await supabase.from('daily_activity').update({ views_received: (data.views_received || 0) + 1 }).eq('id', data.id)
-    else await supabase.from('daily_activity').insert({ user_id: viewedId, activity_date: today, views_received: 1 })
-  } catch {}
+  } catch {
+    /* */
+  }
 }
 
 export async function fetchRecentViews(userId: string) {
   try {
-    const since = new Date(Date.now() - 48 * 3600 * 1000).toISOString()
-    const { data } = await supabase.from('profile_views').select('viewer_id, created_at').eq('viewed_id', userId).gte('created_at', since).order('created_at', { ascending: false }).limit(20)
-    if (!data?.length) return []
-    const ids = [...new Set(data.map(d => d.viewer_id))]
-    const { data: profs } = await supabase.from('profiles').select('id, full_name, username, avatar_url').in('id', ids)
-    const map = Object.fromEntries((profs || []).map(p => [p.id, p]))
-    return data.map(d => ({ ...d, profile: map[d.viewer_id] }))
-  } catch { return [] }
+    const { data } = await supabase
+      .from('profile_views')
+      .select('viewer_id, created_at')
+      .eq('viewed_id', userId)
+      .order('created_at', { ascending: false })
+      .limit(20)
+    return data || []
+  } catch {
+    return []
+  }
 }
 
 export async function toggleSave(userId: string, savedId: string) {
   try {
-    const { data } = await supabase.from('saved_profiles').select('id').eq('user_id', userId).eq('saved_id', savedId).maybeSingle()
-    if (data) { await supabase.from('saved_profiles').delete().eq('id', data.id); return false }
-    await supabase.from('saved_profiles').insert({ user_id: userId, saved_id: savedId })
+    const { data } = await supabase.from('saves').select('id').eq('user_id', userId).eq('saved_id', savedId).maybeSingle()
+    if (data) {
+      await supabase.from('saves').delete().eq('id', data.id)
+      return false
+    }
+    await supabase.from('saves').insert({ user_id: userId, saved_id: savedId })
     return true
-  } catch { return false }
+  } catch {
+    return false
+  }
 }
 
 export async function isSaved(userId: string, savedId: string) {
   try {
-    const { data } = await supabase.from('saved_profiles').select('id').eq('user_id', userId).eq('saved_id', savedId).maybeSingle()
+    const { data } = await supabase.from('saves').select('id').eq('user_id', userId).eq('saved_id', savedId).maybeSingle()
     return !!data
-  } catch { return false }
+  } catch {
+    return false
+  }
 }
 
 export async function listSaved(userId: string) {
   try {
-    const { data } = await supabase.from('saved_profiles').select('saved_id, created_at').eq('user_id', userId).order('created_at', { ascending: false })
-    if (!data?.length) return []
-    const ids = data.map(d => d.saved_id)
-    const { data: profs } = await supabase.from('profiles').select('id, full_name, username, avatar_url, bio, department').in('id', ids)
-    return profs || []
-  } catch { return [] }
+    const { data } = await supabase.from('saves').select('saved_id').eq('user_id', userId)
+    return (data || []).map((r) => r.saved_id)
+  } catch {
+    return []
+  }
 }
 
 export async function mutualCount(myId: string, peerId: string) {
   try {
-    const { data: mine } = await supabase.from('connections').select('user_id, target_id').eq('status', 'accepted').or(`user_id.eq.${myId},target_id.eq.${myId}`)
-    const { data: theirs } = await supabase.from('connections').select('user_id, target_id').eq('status', 'accepted').or(`user_id.eq.${peerId},target_id.eq.${peerId}`)
-    const setMine = new Set((mine || []).map(c => c.user_id === myId ? c.target_id : c.user_id))
-    const setTheirs = new Set((theirs || []).map(c => c.user_id === peerId ? c.target_id : c.user_id))
-    let n = 0
-    setMine.forEach(id => { if (setTheirs.has(id) && id !== peerId && id !== myId) n++ })
-    return n
-  } catch { return 0 }
+    const { count } = await supabase
+      .from('connections')
+      .select('id', { count: 'exact', head: true })
+      .or(`and(user_id.eq.${myId},target_id.eq.${peerId}),and(user_id.eq.${peerId},target_id.eq.${myId})`)
+      .eq('status', 'accepted')
+    return count || 0
+  } catch {
+    return 0
+  }
 }
 
 export async function postBubble(userId: string, text: string, zone = 'Campus') {
   try {
-    const t = text.trim().slice(0, 80)
-    if (!t) return { ok: false as const, error: 'Empty' }
-    await supabase.from('status_bubbles').delete().eq('user_id', userId)
-    const { data, error } = await supabase.from('status_bubbles').insert({
-      user_id: userId, text: t, zone,
-      expires_at: new Date(Date.now() + 24 * 3600 * 1000).toISOString(),
-    }).select('*').single()
-    if (error) return { ok: false as const, error: error.message }
-    return { ok: true as const, data }
+    const { error } = await supabase.from('bubbles').insert({ user_id: userId, text, zone })
+    return { ok: !error, error: error?.message }
   } catch (e: any) {
-    return { ok: false as const, error: e?.message || 'Failed' }
+    return { ok: false, error: e?.message }
   }
 }
 
 export async function fetchBubbles() {
   try {
-    const { data } = await supabase.from('status_bubbles').select('id, user_id, text, zone, expires_at, created_at').gt('expires_at', new Date().toISOString()).order('created_at', { ascending: false }).limit(30)
-    if (!data?.length) return []
-    const ids = data.map(d => d.user_id)
-    const { data: profs } = await supabase.from('profiles').select('id, full_name, username, avatar_url').in('id', ids)
-    const map = Object.fromEntries((profs || []).map(p => [p.id, p]))
-    return data.map(d => ({ ...d, profile: map[d.user_id] }))
-  } catch { return [] }
+    const { data } = await supabase.from('bubbles').select('*').order('created_at', { ascending: false }).limit(40)
+    return data || []
+  } catch {
+    return []
+  }
 }
 
 export async function setFreeNow(userId: string, place: string, note?: string) {
   try {
-    await supabase.from('free_now').delete().eq('user_id', userId)
-    const { data, error } = await supabase.from('free_now').insert({
-      user_id: userId, place, note: note || null,
-      expires_at: new Date(Date.now() + 15 * 60 * 1000).toISOString(),
-    }).select('*').single()
-    if (error) return { ok: false as const, error: error.message }
-    return { ok: true as const, data }
+    const expires = new Date(Date.now() + 90 * 60 * 1000).toISOString()
+    await supabase.from('free_now').upsert(
+      { user_id: userId, place, note: note || null, expires_at: expires, updated_at: new Date().toISOString() },
+      { onConflict: 'user_id' }
+    )
+    return { ok: true }
   } catch (e: any) {
-    return { ok: false as const, error: e?.message || 'Failed' }
+    return { ok: false, error: e?.message }
   }
 }
 
 export async function fetchFreeNow() {
   try {
-    const { data } = await supabase.from('free_now').select('*').gt('expires_at', new Date().toISOString()).order('created_at', { ascending: false }).limit(20)
-    if (!data?.length) return []
-    const ids = data.map(d => d.user_id)
-    const { data: profs } = await supabase.from('profiles').select('id, full_name, username, avatar_url').in('id', ids)
-    const map = Object.fromEntries((profs || []).map(p => [p.id, p]))
-    return data.map(d => ({ ...d, profile: map[d.user_id] }))
-  } catch { return [] }
+    const now = new Date().toISOString()
+    const { data } = await supabase.from('free_now').select('*, profiles:user_id(id, full_name, username, avatar_url, department)').gt('expires_at', now).order('updated_at', { ascending: false }).limit(40)
+    return data || []
+  } catch {
+    return []
+  }
 }
 
-export async function fetchLeaderboard(limit = 20) {
+/** Leaderboard: activity rep + career links (GitHub / LinkedIn / LeetCode / phone) */
+export async function fetchLeaderboard(limit = 25) {
   try {
-    const { data } = await supabase.from('profiles').select('id, full_name, username, avatar_url, rep_score, department').order('rep_score', { ascending: false }).limit(limit)
-    return data || []
-  } catch { return [] }
+    const { data } = await supabase
+      .from('profiles')
+      .select(
+        'id, full_name, username, avatar_url, rep_score, department, college_pod, github_url, github_handle, linkedin_url, leetcode_url, leetcode_handle, phone, skills, bio'
+      )
+      .limit(80)
+    const ranked = (data || [])
+      .map((p) => ({
+        ...p,
+        leader_score: computeLeaderScore(p),
+        career_score: computeLeaderScore(p) - (Number(p.rep_score) || 0),
+      }))
+      .sort((a, b) => b.leader_score - a.leader_score)
+      .slice(0, limit)
+    return ranked
+  } catch {
+    try {
+      const { data } = await supabase
+        .from('profiles')
+        .select('id, full_name, username, avatar_url, rep_score, department')
+        .order('rep_score', { ascending: false })
+        .limit(limit)
+      return data || []
+    } catch {
+      return []
+    }
+  }
 }
 
 export async function fetchDailyRecap(userId: string) {
@@ -181,7 +208,12 @@ export async function fetchDailyRecap(userId: string) {
     const today = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' })
     const { data } = await supabase.from('daily_activity').select('*').eq('user_id', userId).eq('activity_date', today).maybeSingle()
     const views = await fetchRecentViews(userId)
-    return { connects: data?.connects || 0, messages: data?.messages || 0, views_received: data?.views_received || views.length, recent_viewers: views.slice(0, 5) }
+    return {
+      connects: data?.connects || 0,
+      messages: data?.messages || 0,
+      views_received: data?.views_received || views.length,
+      recent_viewers: views.slice(0, 5),
+    }
   } catch {
     return { connects: 0, messages: 0, views_received: 0, recent_viewers: [] as any[] }
   }
@@ -191,7 +223,9 @@ export async function bumpDaily(userId: string, field: 'connects' | 'messages') 
   try {
     const today = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' })
     const { data } = await supabase.from('daily_activity').select('*').eq('user_id', userId).eq('activity_date', today).maybeSingle()
-    if (data) await supabase.from('daily_activity').update({ [field]: (data[field] || 0) + 1 }).eq('id', data.id)
-    else await supabase.from('daily_activity').insert({ user_id: userId, activity_date: today, [field]: 1 })
-  } catch {}
+    const next = { ...(data || {}), user_id: userId, activity_date: today, [field]: ((data as any)?.[field] || 0) + 1 }
+    await supabase.from('daily_activity').upsert(next)
+  } catch {
+    /* */
+  }
 }
