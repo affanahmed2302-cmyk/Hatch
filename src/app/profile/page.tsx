@@ -3,7 +3,6 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { supabase, saveProfile } from "@/lib/supabase";
-import { uploadUserAvatar } from "@/lib/uploadAvatar";
 import { computeCareerScore, rankBreakdown } from "@/lib/profileRank";
 import PhotoSheet from "@/components/PhotoSheet";
 import Nav from "@/components/Nav";
@@ -27,6 +26,7 @@ export default function ProfilePage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [photoOpen, setPhotoOpen] = useState(false);
+  const [photoBusy, setPhotoBusy] = useState(false);
   const router = useRouter();
 
   useEffect(() => {
@@ -50,7 +50,7 @@ export default function ProfilePage() {
         setLinkedin(p.linkedin_url || "");
         setLeetcode(p.leetcode_url || p.leetcode_handle || "");
         setPhone(p.phone || "");
-        setYear(p.year || "");
+        setYear(p.year != null ? String(p.year) : "");
         setBranch(p.branch || p.department || "");
         setAvatarUrl(p.avatar_url || "");
       }
@@ -89,13 +89,32 @@ export default function ProfilePage() {
       year,
       branch,
       department: branch,
-      avatar_url: avatarUrl,
+      avatar_url: avatarUrl || null,
     });
     if (!res.ok) setErr((res as any).error || "Save failed");
-    else {
-      setMsg(`Saved · career score +${previewRank} on leaderboard`);
-    }
+    else setMsg(`Saved · career score +${previewRank} toward leaderboard`);
     setSaving(false);
+  }
+
+  async function onPhotoFile(file: File) {
+    if (!userId) return;
+    setPhotoBusy(true);
+    setErr("");
+    try {
+      const ext = file.name.split(".").pop() || "jpg";
+      const path = `${userId}/avatar-${Date.now()}.${ext}`;
+      const { error: upErr } = await supabase.storage.from("avatars").upload(path, file, { upsert: true });
+      if (upErr) throw upErr;
+      const { data } = supabase.storage.from("avatars").getPublicUrl(path);
+      const url = data.publicUrl;
+      setAvatarUrl(url);
+      await saveProfile(userId, { avatar_url: url });
+      setPhotoOpen(false);
+      setMsg("Photo updated");
+    } catch (e: any) {
+      setErr(e?.message || "Upload failed — check Storage bucket avatars");
+    }
+    setPhotoBusy(false);
   }
 
   if (loading) {
@@ -131,29 +150,9 @@ export default function ProfilePage() {
               borderRadius: "50%",
               border: "2px solid rgba(139,92,246,0.45)",
               background: avatarUrl ? `url(${avatarUrl}) center/cover` : "var(--grad-cool)",
-              position: "relative",
-              padding: 0,
               cursor: "pointer",
             }}
-          >
-            <span
-              style={{
-                position: "absolute",
-                right: 2,
-                bottom: 2,
-                width: 28,
-                height: 28,
-                borderRadius: "50%",
-                background: "rgba(0,0,0,0.7)",
-                fontSize: 14,
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-              }}
-            >
-              ✎
-            </span>
-          </button>
+          />
           <p className="muted" style={{ fontSize: 12 }}>
             Tap photo to update
           </p>
@@ -162,7 +161,7 @@ export default function ProfilePage() {
         <div className="card" style={{ border: "1px solid rgba(167,139,250,0.35)" }}>
           <div style={{ fontWeight: 800, fontSize: 14 }}>Career score preview: {previewRank}</div>
           <p className="muted" style={{ fontSize: 12, marginTop: 4 }}>
-            Optional links below boost leaderboard rank (not required to use Hatch).
+            Optional — GitHub, LinkedIn, LeetCode, phone boost rank. Not required to use Hatch.
           </p>
           <ul className="muted" style={{ fontSize: 11, marginTop: 8, paddingLeft: 16 }}>
             {rankBreakdown({
@@ -189,50 +188,33 @@ export default function ProfilePage() {
           <label className="label">Bio</label>
           <textarea value={bio} onChange={(e) => setBio(e.target.value)} rows={3} placeholder="About you" />
           <label className="label">Skills (comma separated)</label>
-          <input value={skills} onChange={(e) => setSkills(e.target.value)} placeholder="React, Python, Design" />
+          <input value={skills} onChange={(e) => setSkills(e.target.value)} placeholder="React, Python, DSA" />
           <label className="label">Year</label>
-          <input value={year} onChange={(e) => setYear(e.target.value)} placeholder="2nd year" />
+          <input value={year} onChange={(e) => setYear(e.target.value)} placeholder="2" />
           <label className="label">Branch</label>
           <input value={branch} onChange={(e) => setBranch(e.target.value)} placeholder="CSE" />
         </div>
 
         <div className="card stack">
-          <div style={{ fontWeight: 800, fontSize: 14, marginBottom: 4 }}>Career links (optional)</div>
+          <div style={{ fontWeight: 800, fontSize: 14 }}>Career links (optional)</div>
           <p className="muted" style={{ fontSize: 12, marginBottom: 8 }}>
-            Not compulsory — add what you have. Helps ranking &amp; teammates find you.
+            Not compulsory. Adding them raises your leaderboard score.
           </p>
           <label className="label">GitHub</label>
-          <input
-            value={github}
-            onChange={(e) => setGithub(e.target.value)}
-            placeholder="https://github.com/you or username"
-          />
+          <input value={github} onChange={(e) => setGithub(e.target.value)} placeholder="https://github.com/you" />
           <label className="label">LinkedIn</label>
-          <input
-            value={linkedin}
-            onChange={(e) => setLinkedin(e.target.value)}
-            placeholder="https://linkedin.com/in/..."
-          />
+          <input value={linkedin} onChange={(e) => setLinkedin(e.target.value)} placeholder="https://linkedin.com/in/..." />
           <label className="label">LeetCode</label>
-          <input
-            value={leetcode}
-            onChange={(e) => setLeetcode(e.target.value)}
-            placeholder="https://leetcode.com/u/you or username"
-          />
-          <label className="label">Phone (optional, private)</label>
-          <input
-            value={phone}
-            onChange={(e) => setPhone(e.target.value)}
-            placeholder="+91…"
-            inputMode="tel"
-          />
+          <input value={leetcode} onChange={(e) => setLeetcode(e.target.value)} placeholder="username or profile URL" />
+          <label className="label">Phone (optional)</label>
+          <input value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="+91…" inputMode="tel" />
           <p className="muted" style={{ fontSize: 11 }}>
-            Phone is for ranking + your own profile. We don’t show it publicly on the feed.
+            Phone counts for rank; not shown on public campus feed.
           </p>
         </div>
 
         <p className="muted" style={{ fontSize: 12 }}>
-          Signed in as {email}
+          {email}
         </p>
         <button type="button" className="btn" onClick={onSave} disabled={saving}>
           {saving ? "Saving…" : "Save profile"}
@@ -240,21 +222,7 @@ export default function ProfilePage() {
         <div style={{ height: 88 }} />
       </div>
       <Nav />
-      {photoOpen && userId && (
-        <PhotoSheet
-          userId={userId}
-          onClose={() => setPhotoOpen(false)}
-          onUploaded={async (url: string) => {
-            setAvatarUrl(url);
-            setPhotoOpen(false);
-            try {
-              await uploadUserAvatar(userId, url);
-            } catch {
-              /* */
-            }
-          }}
-        />
-      )}
+      <PhotoSheet open={photoOpen} onClose={() => setPhotoOpen(false)} onFile={onPhotoFile} busy={photoBusy} />
     </div>
   );
 }
