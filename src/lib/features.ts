@@ -12,7 +12,6 @@ export type FeatureKey =
   | 'feature_club_events'
   | 'maintenance_mode'
 
-/** Circles (feature_sparks) OFF by default until founder enables in Pilot */
 const DEFAULTS: Record<FeatureKey, boolean> = {
   feature_sparks: false,
   dating_app_active: false,
@@ -164,7 +163,6 @@ export function formatWindowLabel(start: number, end: number): string {
   return `${fmt(start)}–${fmt(end)} IST`
 }
 
-/** Admin metrics — soft counts; never throws */
 export async function fetchAdminMetrics() {
   try {
     const [{ count: users }, { count: reports }] = await Promise.all([
@@ -195,15 +193,10 @@ export async function fetchAdminReports(limit = 20) {
   }
 }
 
-/** Lightweight product advice for pilot/admin */
-export function assistantCeoAdvice(metrics?: {
-  users?: number
-  reports?: number
-  activeToday?: number
-}): string[] {
+export function assistantCeoAdvice(metrics?: Record<string, any>): string[] {
   const tips: string[] = []
-  const u = metrics?.users ?? 0
-  const r = metrics?.reports ?? 0
+  const u = Number(metrics?.users ?? 0)
+  const r = Number(metrics?.reports ?? 0)
   if (u < 50) tips.push("Push campus launch: clubs + I'm Free on Home.")
   else tips.push('Users growing — keep confessions window tight and leaderboard visible.')
   if (r > 5) tips.push('Review reports in Safety — block abusers fast.')
