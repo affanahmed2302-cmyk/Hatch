@@ -1,10 +1,12 @@
 import { createClient } from '@supabase/supabase-js'
 import { isAllowedStudentEmail, collegePodFromEmail, extractDomain } from './college'
 
-const url = process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://ahtabgrlkyjjqxvndlb.supabase.co'
-const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || ''
+const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://ahtabgrlkyjjjqxvndlb.supabase.co'
+const SUPABASE_ANON_KEY =
+  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ||
+  'sb_publishable_3YcwyaHxFjIcacIPNsxDWQ_IreLbFRE'
 
-export const supabase = createClient(url, key)
+export const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY)
 
 export const SUPER_ADMINS = ['affanahmed2302@gmail.com']
 
@@ -59,24 +61,34 @@ export function rateLimit(key: string, a = 2000, b?: number): boolean {
   return true
 }
 
-export function displayName(p: any): string {
+export function displayName(p: {
+  full_name?: string | null
+  username?: string | null
+  email?: string | null
+} | null): string {
   if (!p) return 'Student'
   return (p.full_name || p.username || p.email?.split('@')[0] || 'Student').trim()
 }
 
-export function yearToLabel(y?: number | string | null) {
-  if (y == null || y === '') return ''
-  const n = typeof y === 'number' ? y : parseInt(String(y), 10)
-  if (Number.isNaN(n)) return String(y)
-  const map: Record<number, string> = { 1: '1st year', 2: '2nd year', 3: '3rd year', 4: '4th year' }
-  return map[n] || String(y)
+export function handleOf(p: { username?: string | null; full_name?: string | null }) {
+  if (p?.username) return '@' + p.username
+  if (p?.full_name) return p.full_name.split(' ')[0]
+  return 'Student'
 }
 
-function yearToNumber(y: unknown) {
+export function yearToNumber(y: string | number | null | undefined): number | null {
+  if (y == null || y === '') return null
   if (typeof y === 'number') return y
-  const s = String(y || '')
-  const m = s.match(/(\d)/)
+  const m = String(y).match(/(\d)/)
   return m ? parseInt(m[1], 10) : null
+}
+
+export function yearToLabel(y: string | number | null | undefined): string {
+  if (y == null || y === '') return ''
+  const n = typeof y === 'number' ? y : yearToNumber(y)
+  if (n == null) return String(y)
+  const map: Record<number, string> = { 1: '1st year', 2: '2nd year', 3: '3rd year', 4: '4th year' }
+  return map[n] || String(y)
 }
 
 export async function saveProfile(userId: string, fields: Record<string, unknown>) {
@@ -105,7 +117,7 @@ export async function saveProfile(userId: string, fields: Record<string, unknown
     }
     if (f.bio !== undefined) payload.bio = f.bio
     if (f.department !== undefined) payload.department = f.department
-    if (f.year !== undefined) payload.year = yearToNumber(f.year)
+    if (f.year !== undefined) payload.year = yearToNumber(f.year as any)
     if (f.phone !== undefined) payload.phone = f.phone
     if (f.github_handle !== undefined) payload.github_handle = f.github_handle
     if (f.leetcode_handle !== undefined) payload.leetcode_handle = f.leetcode_handle
@@ -135,28 +147,122 @@ export async function ensureProfile(userId: string, email?: string | null) {
       const pod = email ? collegePodFromEmail(email) : 'bmsce'
       const domain = email ? extractDomain(email) : null
       const local = email ? email.split('@')[0].replace(/[._0-9]/g, ' ').trim() : ''
-      const guessName = local ? local.split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ').slice(0, 40) : null
-      await supabase.from('profiles').upsert({
-        id: userId,
-        email: email || null,
-        full_name: guessName || null,
-        college: pod.toUpperCase(),
-        college_pod: pod,
-        college_domain: domain,
-        role: 'student',
-        skills: [],
-        connection_count: 0,
-        terms_accepted: false,
-        rep_score: 0,
-      }, { onConflict: 'id' })
+      const guessName = local
+        ? local.split(' ').map((w) => w.charAt(0).toUpperCase() + w.slice(1)).join(' ').slice(0, 40)
+        : null
+      await supabase.from('profiles').upsert(
+        {
+          id: userId,
+          email: email || null,
+          full_name: guessName || null,
+          college: pod.toUpperCase(),
+          college_pod: pod,
+          college_domain: domain,
+          role: 'student',
+          skills: [],
+          connection_count: 0,
+          terms_accepted: false,
+          rep_score: 0,
+        },
+        { onConflict: 'id' }
+      )
+    } else if ((!data.full_name || data.full_name === 'Student') && email) {
+      const local = email.split('@')[0].replace(/[._0-9]/g, ' ').trim()
+      const guessName = local
+        ? local.split(' ').map((w) => w.charAt(0).toUpperCase() + w.slice(1)).join(' ').slice(0, 40)
+        : null
+      if (guessName) {
+        await supabase.from('profiles').update({ full_name: guessName }).eq('id', userId)
+      }
     }
-  } catch { /* */ }
+  } catch {
+    /* */
+  }
 }
 
-export async function jitsiRoom(_kind: string, id: string) {
-  return 'hatch-' + id.slice(0, 24)
+export async function needsTermsAcceptance(userId: string): Promise<boolean> {
+  try {
+    const { data } = await supabase.from('profiles').select('terms_accepted').eq('id', userId).maybeSingle()
+    return data?.terms_accepted === false || data?.terms_accepted == null
+  } catch {
+    return false
+  }
 }
 
-export function jitsiEmbedUrl(room: string) {
+export async function acceptTerms(userId: string) {
+  try {
+    await supabase
+      .from('profiles')
+      .update({ terms_accepted: true, terms_accepted_at: new Date().toISOString() })
+      .eq('id', userId)
+    return { ok: true as const }
+  } catch (e: any) {
+    return { ok: false as const, error: e?.message }
+  }
+}
+
+export async function isProfileComplete(userId: string): Promise<{ ok: boolean; missing: string[] }> {
+  try {
+    const { data } = await supabase
+      .from('profiles')
+      .select('full_name, username, bio, avatar_url')
+      .eq('id', userId)
+      .maybeSingle()
+    const missing: string[] = []
+    if (!data?.full_name || data.full_name.length < 2) missing.push('name')
+    if (!data?.username || data.username.length < 3) missing.push('username')
+    if (!data?.bio || String(data.bio).length < 20) missing.push('bio')
+    if (!data?.avatar_url) missing.push('photo')
+    return { ok: missing.length === 0, missing }
+  } catch {
+    return { ok: false, missing: ['profile'] }
+  }
+}
+
+export function jitsiRoom(kind: 'dm' | 'team', id: string) {
+  return `hatch-${kind}-${id.slice(0, 20)}`
+}
+
+export function jitsiEmbedUrl(room: string, _audioOnly = false, _displayName = 'Hatch') {
   return 'https://meet.jit.si/' + room
+}
+
+export function jitsiMeetUrl(room: string, _displayName: string) {
+  return 'https://meet.jit.si/' + room
+}
+
+export async function postPulse(userId: string, content: string, category = 'general', isAnonymous = true) {
+  try {
+    const { error } = await supabase.from('pulse_posts').insert({
+      user_id: userId,
+      content,
+      category,
+      is_anonymous: isAnonymous,
+    })
+    return { ok: !error, error: error?.message }
+  } catch (e: any) {
+    return { ok: false, error: e?.message }
+  }
+}
+
+export async function fetchPulseFeed() {
+  try {
+    const { data } = await supabase
+      .from('pulse_posts')
+      .select('*')
+      .order('created_at', { ascending: false })
+      .limit(40)
+    return data || []
+  } catch {
+    return []
+  }
+}
+
+export async function deletePulse(postId: string, userId: string) {
+  try {
+    await supabase.from('pulse_posts').delete().eq('id', postId).eq('user_id', userId)
+    return { ok: true }
+  } catch (e: any) {
+    return { ok: false, error: e?.message }
+  }
 }
