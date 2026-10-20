@@ -38,8 +38,6 @@ export async function getFeatureFlags(): Promise<Record<FeatureKey, boolean>> {
   } catch {
     /* missing table → defaults */
   }
-  // Circles = feature_sparks only (no dual AND with dating_app_active)
-  // dating_app_active kept as alias for admin UI compatibility
   out.dating_app_active = out.feature_sparks
   return out
 }
@@ -50,7 +48,6 @@ export async function isFeatureOn(key: FeatureKey): Promise<boolean> {
   return !!flags[key]
 }
 
-/** Internal flag — UI never says "dating" */
 export async function isDatingAppActive(): Promise<boolean> {
   return isFeatureOn('feature_sparks')
 }
@@ -93,7 +90,6 @@ export async function setFeatureFlag(
   }
 }
 
-/** Configurable window — default 22:00–05:00 local browser time (Asia/Kolkata for BMSCE users) */
 export async function getConfessionWindow(): Promise<{ start: number; end: number }> {
   let start = 22
   let end = 5
@@ -147,7 +143,6 @@ export async function setConfessionWindow(
 export async function isConfessionOpenNow(): Promise<boolean> {
   if (!(await isFeatureOn('feature_confessions'))) return false
   const { start, end } = await getConfessionWindow()
-  // Use Asia/Kolkata hour for BMSCE (configurable later via TZ setting)
   const h = Number(
     new Intl.DateTimeFormat('en-IN', {
       hour: 'numeric',
@@ -167,4 +162,52 @@ export function formatWindowLabel(start: number, end: number): string {
     return `${h}${ap}`
   }
   return `${fmt(start)}–${fmt(end)} IST`
+}
+
+/** Admin metrics — soft counts; never throws */
+export async function fetchAdminMetrics() {
+  try {
+    const [{ count: users }, { count: reports }] = await Promise.all([
+      supabase.from('profiles').select('id', { count: 'exact', head: true }),
+      supabase.from('reports').select('id', { count: 'exact', head: true }),
+    ])
+    return {
+      users: users || 0,
+      reports: reports || 0,
+      activeToday: 0,
+      messages24h: 0,
+    }
+  } catch {
+    return { users: 0, reports: 0, activeToday: 0, messages24h: 0 }
+  }
+}
+
+export async function fetchAdminReports(limit = 20) {
+  try {
+    const { data } = await supabase
+      .from('reports')
+      .select('*')
+      .order('created_at', { ascending: false })
+      .limit(limit)
+    return data || []
+  } catch {
+    return []
+  }
+}
+
+/** Lightweight product advice for pilot/admin */
+export function assistantCeoAdvice(metrics?: {
+  users?: number
+  reports?: number
+  activeToday?: number
+}): string[] {
+  const tips: string[] = []
+  const u = metrics?.users ?? 0
+  const r = metrics?.reports ?? 0
+  if (u < 50) tips.push("Push campus launch: clubs + I'm Free on Home.")
+  else tips.push('Users growing — keep confessions window tight and leaderboard visible.')
+  if (r > 5) tips.push('Review reports in Safety — block abusers fast.')
+  tips.push('Keep Google OAuth + college email gate working before marketing.')
+  tips.push('Circles/Sparks stays OFF until officially approved.')
+  return tips
 }
