@@ -1,13 +1,15 @@
 "use client";
+
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
+/** Primary IA: Home · Discover · Create · Inbox · Profile */
 const items = [
   { href: "/home", label: "Home", icon: "⌂" },
-  { href: "/games", label: "Games", icon: "◈" },
-  { href: "/discover", label: "People", icon: "◎" },
-  { href: "/inbox", label: "Chats", icon: "◇" },
-  { href: "/more", label: "More", icon: "☰" },
+  { href: "/discover", label: "Discover", icon: "◎" },
+  { href: "/create", label: "Create", icon: "+", create: true },
+  { href: "/inbox", label: "Inbox", icon: "◇" },
+  { href: "/profile", label: "Profile", icon: "○" },
 ];
 
 export default function Nav() {
@@ -17,16 +19,26 @@ export default function Nav() {
     path.startsWith("/login") ||
     path.startsWith("/signup") ||
     path.startsWith("/onboarding") ||
-    path.startsWith("/auth");
+    path.startsWith("/auth") ||
+    path.startsWith("/terms");
 
   if (hide) return null;
 
   return (
     <nav className="nav" aria-label="Main">
       {items.map((it) => {
-        const on = path === it.href || (it.href !== "/home" && path.startsWith(it.href));
+        const on =
+          path === it.href ||
+          (it.href !== "/home" && path.startsWith(it.href + "/")) ||
+          (it.href === "/profile" && path.startsWith("/settings"));
         return (
-          <Link key={it.href} href={it.href} className={on ? "on" : ""} aria-current={on ? "page" : undefined}>
+          <Link
+            key={it.href}
+            href={it.href}
+            className={`${on ? "on" : ""}${it.create ? " create-tab" : ""}`}
+            aria-current={on ? "page" : undefined}
+            aria-label={it.label}
+          >
             <span className="nav-icon" aria-hidden>
               {it.icon}
             </span>
