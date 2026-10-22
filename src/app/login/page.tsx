@@ -21,7 +21,11 @@ export default function LoginPage() {
       const em = email.trim().toLowerCase();
       const gate = isAllowedCollegeEmail(em);
       if (!gate.ok) {
-        setErr(gate.error || "College email only (.ac.in)");
+        setErr(
+          gate.error?.includes("Public")
+            ? "Please use your college mail id (.ac.in) — Gmail and other public emails are blocked"
+            : gate.error || "Please use your college mail id (.ac.in)"
+        );
         setLoading(false);
         return;
       }
@@ -88,20 +92,25 @@ export default function LoginPage() {
       <div className="logo" style={{ marginBottom: 20 }}>HATCH</div>
       <h1 className="h1" style={{ marginBottom: 8 }}>Welcome back</h1>
       <p className="muted" style={{ fontSize: 13, marginBottom: 16 }}>
-        College Google only · .ac.in · ~10 seconds
+        College email only · use .ac.in Google · ~10 seconds
       </p>
-      {err && <div className="fail" style={{ marginBottom: 10 }}>{err}</div>}
+      {err && (
+        <div className="fail" role="alert" style={{ marginBottom: 10 }}>
+          {err}
+        </div>
+      )}
       <button
         type="button"
         className="btn"
         style={{ width: "100%", marginBottom: 10, background: "linear-gradient(135deg,#fff,#e2e8f0)", color: "#0f172a" }}
         onClick={google}
         disabled={gLoading}
+        aria-busy={gLoading}
       >
         {gLoading ? "Redirecting…" : "Continue with Google"}
       </button>
       <p className="muted" style={{ fontSize: 12, marginBottom: 8, textAlign: "center", lineHeight: 1.45 }}>
-        Use your <strong style={{ color: "#e9d5ff" }}>college Google</strong> (email ends with .ac.in).
+        Use your <strong style={{ color: "var(--lime)" }}>college Google</strong> (email ends with .ac.in).
         Gmail is blocked so only students join.
       </p>
       <p className="muted" style={{ fontSize: 11, marginBottom: 14, textAlign: "center", lineHeight: 1.4 }}>
@@ -124,6 +133,7 @@ export default function LoginPage() {
             onChange={(e) => setEmail(e.target.value)}
             autoComplete="email"
             inputMode="email"
+            aria-label="College email"
           />
           <input
             type="password"
@@ -132,8 +142,9 @@ export default function LoginPage() {
             onChange={(e) => setPassword(e.target.value)}
             onKeyDown={(e) => e.key === "Enter" && login()}
             autoComplete="current-password"
+            aria-label="Password"
           />
-          <button className="btn" onClick={login} disabled={loading}>
+          <button type="button" className="btn" onClick={login} disabled={loading} aria-busy={loading}>
             {loading ? "Signing in…" : "Log in"}
           </button>
         </div>
@@ -145,6 +156,11 @@ export default function LoginPage() {
       </p>
       <p className="muted" style={{ marginTop: 16, fontSize: 13 }}>
         New here? <Link href="/signup">Join with Google</Link>
+      </p>
+      <p className="muted" style={{ marginTop: 12, fontSize: 12 }}>
+        <Link href="/safety">Safety</Link>
+        {" · "}
+        <Link href="/terms">Terms</Link>
       </p>
     </div>
   );
