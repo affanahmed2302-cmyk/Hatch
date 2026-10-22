@@ -231,11 +231,14 @@ export function jitsiMeetUrl(room: string, _displayName: string) {
   return 'https://meet.jit.si/' + room
 }
 
+/** pulse_posts schema uses author_id (not user_id) — see hatch_master_fix.sql */
 export async function postPulse(userId: string, content: string, category = 'general', isAnonymous = true) {
   try {
+    const text = String(content || '').trim().slice(0, 500)
+    if (!text) return { ok: false, error: 'Write something first' }
     const { error } = await supabase.from('pulse_posts').insert({
-      user_id: userId,
-      content,
+      author_id: userId,
+      content: text,
       category,
       is_anonymous: isAnonymous,
     })
@@ -247,11 +250,12 @@ export async function postPulse(userId: string, content: string, category = 'gen
 
 export async function fetchPulseFeed() {
   try {
-    const { data } = await supabase
+    const { data, error } = await supabase
       .from('pulse_posts')
-      .select('*')
+      .select('id, author_id, content, category, is_anonymous, likes, created_at, expires_at')
       .order('created_at', { ascending: false })
       .limit(40)
+    if (error) return []
     return data || []
   } catch {
     return []
@@ -260,8 +264,12 @@ export async function fetchPulseFeed() {
 
 export async function deletePulse(postId: string, userId: string) {
   try {
-    await supabase.from('pulse_posts').delete().eq('id', postId).eq('user_id', userId)
-    return { ok: true }
+    const { error } = await supabase
+      .from('pulse_posts')
+      .delete()
+      .eq('id', postId)
+      .eq('author_id', userId)
+    return { ok: !error, error: error?.message }
   } catch (e: any) {
     return { ok: false, error: e?.message }
   }
