@@ -3,139 +3,130 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
-import {
-  isConfessionOpenNow,
-  getConfessionWindow,
-  formatWindowLabel,
-} from "@/lib/features";
+import { formatWindowLabel } from "@/lib/features";
 import Nav from "@/components/Nav";
 
-/** Confessions — anonymous campus posts. Schedule from app_settings (default 22–5 IST). */
+type Item = { id: string; content: string; created_at: string };
+
 export default function ConfessionsPage() {
   const [open, setOpen] = useState(false);
   const [windowLabel, setWindowLabel] = useState("10pm–5am IST");
   const [text, setText] = useState("");
-  const [list, setList] = useState<any[]>([]);
+  const [list, setList] = useState<Item[]>([]);
   const [msg, setMsg] = useState("");
   const [err, setErr] = useState("");
-  const [uid, setUid] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
   const router = useRouter();
 
+  async function authHeader() {
+    const { data } = await supabase.auth.getSession();
+    const token = data.session?.access_token;
+    if (!token) return null;
+    return { Authorization: `Bearer ${token}` };
+  }
+
   async function load() {
+    const headers = await authHeader();
+    if (!headers) {
+      router.push("/login");
+      return;
+    }
     try {
-      const { data } = await supabase
-        .from("confessions")
-        .select("id, content, created_at")
-        .order("created_at", { ascending: false })
-        .limit(40);
-      setList(data || []);
-    } catch {
-      setList([]);
+      const res = await fetch("/api/confessions", { headers });
+      const json = await res.json();
+      if (!res.ok) {
+        setErr(json.error || "Failed to load");
+        return;
+      }
+      setList(json.items || []);
+      setOpen(!!json.open);
+      if (json.window) setWindowLabel(formatWindowLabel(json.window.start, json.window.end));
+      setErr("");
+    } catch (e: any) {
+      setErr(e?.message || "Network error");
     }
   }
 
   useEffect(() => {
-    (async () => {
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
-      if (!user) {
-        router.push("/login");
-        return;
-      }
-      setUid(user.id);
-      setOpen(await isConfessionOpenNow());
-      const w = await getConfessionWindow();
-      setWindowLabel(formatWindowLabel(w.start, w.end));
-      await load();
-    })();
+    load();
   }, [router]);
 
   async function post() {
-    if (!uid || !text.trim()) return;
-    if (!(await isConfessionOpenNow())) {
-      setErr("Confessions is closed right now");
+    if (!text.trim()) return;
+    setLoading(true);
+    setErr("");
+    setMsg("");
+    const headers = await authHeader();
+    if (!headers) {
+      router.push("/login");
       return;
     }
-    const { error } = await supabase.from("confessions").insert({
-      author_id: uid,
-      content: text.trim().slice(0, 280),
-      is_anonymous: true,
-    });
-    if (error) {
-      setErr(
-        error.message.includes("relation")
-          ? "Run sql/confessions.sql in Supabase"
-          : error.message
-      );
-      return;
+    try {
+      const res = await fetch("/api/confessions", {
+        method: "POST",
+        headers: { ...headers, "Content-Type": "application/json" },
+        body: JSON.stringify({ content: text.trim() }),
+      });
+      const json = await res.json();
+      if (!res.ok) setErr(json.error || "Could not post");
+      else {
+        setText("");
+        setMsg("Posted anonymously");
+        await load();
+      }
+    } catch (e: any) {
+      setErr(e?.message || "Network error");
     }
-    setText("");
-    setMsg("Posted anonymously");
-    await load();
+    setLoading(false);
   }
 
   return (
     <div className="shell">
       <div className="topbar">
-        <Link href="/more" className="btn-ghost btn-sm">
-          ←
+        <div className="logo">CONFESSIONS</div>
+        <Link href="/more" className="btn-ghost btn-sm" style={{ marginLeft: "auto" }}>
+          More
         </Link>
-        <div className="logo" style={{ fontSize: 16 }}>
-          Confessions
-        </div>
       </div>
-      <div className="page">
-        <p className="muted" style={{ fontSize: 13, marginBottom: 12, lineHeight: 1.45 }}>
-          Anonymous campus confessions · open{" "}
-          <strong style={{ color: "#e9d5ff" }}>{windowLabel}</strong>. Be kind. No doxxing.
+      <div className="page stack">
+        <p className="muted" style={{ fontSize: 13, lineHeight: 1.5 }}>
+          Anonymous campus posts during {windowLabel}. Authors are not shown to other students. Not perfectly anonymous to moderators with database access.
         </p>
-        {msg && (
-          <div className="ok" style={{ marginBottom: 10 }}>
-            {msg}
-          </div>
-        )}
-        {err && (
-          <div className="fail" style={{ marginBottom: 10 }}>
-            {err}
-          </div>
-        )}
         {!open && (
-          <div className="card" style={{ marginBottom: 12, border: "1px solid rgba(251,191,36,0.3)" }}>
-            <div style={{ fontWeight: 700 }}>Closed right now</div>
-            <p className="muted" style={{ fontSize: 12, marginTop: 4 }}>
-              Posting opens {windowLabel}. You can still read recent posts.
-            </p>
-          </div>
+          <div className="fail">Window closed ({windowLabel}). You can still read recent posts.</div>
         )}
         {open && (
-          <div className="card stack" style={{ marginBottom: 12 }}>
+          <div className="card stack">
             <textarea
               value={text}
               onChange={(e) => setText(e.target.value)}
-              placeholder="Share something for campus…"
               maxLength={280}
               rows={3}
+              placeholder="Say something honest — no names, no harassment"
+              aria-label="Confession text"
             />
-            <button className="btn btn-sm" onClick={post} disabled={!text.trim()}>
-              Post anonymously
-            </button>
+            <div className="row" style={{ justifyContent: "space-between" }}>
+              <span className="muted" style={{ fontSize: 12 }}>
+                {text.length}/280
+              </span>
+              <button type="button" className="btn btn-sm" disabled={!text.trim() || loading} onClick={post}>
+                {loading ? "Posting…" : "Post anonymously"}
+              </button>
+            </div>
           </div>
         )}
+        {msg && <div className="ok">{msg}</div>}
+        {err && <div className="fail">{err}</div>}
+        <div className="section-label">Recent</div>
+        {list.length === 0 && <div className="empty">No confessions yet</div>}
         {list.map((c) => (
-          <div key={c.id} className="card" style={{ marginBottom: 8 }}>
+          <div key={c.id} className="card">
             <p style={{ fontSize: 14, lineHeight: 1.45 }}>{c.content}</p>
-            <p className="muted" style={{ fontSize: 11, marginTop: 6 }}>
-              Anonymous
+            <p className="muted" style={{ fontSize: 11, marginTop: 8 }}>
+              {new Date(c.created_at).toLocaleString("en-IN")}
             </p>
           </div>
         ))}
-        {list.length === 0 && (
-          <p className="muted" style={{ textAlign: "center", marginTop: 24 }}>
-            No confessions yet
-          </p>
-        )}
-        <div style={{ height: 88 }} />
       </div>
       <Nav />
     </div>
