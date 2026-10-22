@@ -7,6 +7,8 @@ import { haptic, playPing, bumpChatStreak, markMessagesRead, bumpDaily } from "@
 import { soundSend } from "@/lib/uiSounds";
 import { isBlockedEitherWay } from "@/lib/blocks";
 import { getChatTheme, setChatThemeId, CHAT_THEMES, type ChatThemeId } from "@/lib/chatTheme";
+import { togglePin, isPinned } from "@/lib/pins";
+import { toggleMute, isMuted, toggleArchive, isArchived } from "@/lib/chatPrefs";
 import Avatar from "@/components/Avatar";
 import ChatBlockBar from "@/components/ChatBlockBar";
 
@@ -22,6 +24,8 @@ type Msg = {
   _failed?: boolean;
 };
 
+const QUICK_EMOJI = ["👍", "🔥", "😂", "❤️", "👏", "🙏", "✨", "💯"];
+
 function dayLabel(iso: string) {
   const d = new Date(iso);
   const today = new Date();
@@ -32,7 +36,6 @@ function dayLabel(iso: string) {
   return d.toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" });
 }
 
-/** Real DM screen — profiles + themes (personal, localStorage). */
 export default function ChatPage() {
   const { id: peerId } = useParams<{ id: string }>();
   const [myId, setMyId] = useState<string | null>(null);
@@ -44,7 +47,14 @@ export default function ChatPage() {
   const [sending, setSending] = useState(false);
   const [themeId, setThemeId] = useState<ChatThemeId>("midnight");
   const [showThemes, setShowThemes] = useState(false);
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [showEmoji, setShowEmoji] = useState(false);
+  const [pinned, setPinned] = useState(false);
+  const [muted, setMuted] = useState(false);
+  const [archived, setArchived] = useState(false);
+  const [showJump, setShowJump] = useState(false);
   const bottom = useRef<HTMLDivElement>(null);
+  const listRef = useRef<HTMLDivElement>(null);
   const router = useRouter();
   const theme = CHAT_THEMES.find((t) => t.id === themeId) || getChatTheme();
 
@@ -71,10 +81,13 @@ export default function ChatPage() {
   useEffect(() => {
     try {
       setThemeId(getChatTheme().id);
+      setPinned(isPinned(peerId));
+      setMuted(isMuted(peerId));
+      setArchived(isArchived(peerId));
     } catch {
       /* */
     }
-  }, []);
+  }, [peerId]);
 
   useEffect(() => {
     let ch: ReturnType<typeof supabase.channel> | null = null;
@@ -128,7 +141,7 @@ export default function ChatPage() {
             if (m.sender_id !== peerId) return;
             setMsgs((prev) => (prev.some((x) => x.id === m.id) ? prev : [...prev, m]));
             haptic(8);
-            playPing();
+            if (!isMuted(peerId)) playPing();
             scrollEnd();
             markMessagesRead(user.id, peerId).catch(() => {});
           }
@@ -189,6 +202,13 @@ export default function ChatPage() {
     setSending(false);
   }
 
+  function onScrollList() {
+    const el = listRef.current;
+    if (!el) return;
+    const nearBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 120;
+    setShowJump(!nearBottom);
+  }
+
   const peerName = displayName(peer || {});
   const online = isRecentlyOnline(peer?.last_seen);
 
@@ -225,6 +245,7 @@ export default function ChatPage() {
         margin: "0 auto",
         background: theme.bg,
         color: theme.theirsText,
+        position: "relative",
       }}
     >
       <header
@@ -268,7 +289,7 @@ export default function ChatPage() {
             >
               {peerName}
             </div>
-            <p style={{ fontSize: 11, opacity: 0.7 }}>
+            <p style={{ fontSize: 11, opacity: 0.7, margin: 0 }}>
               {peer?.username
                 ? "@" + peer.username
                 : online
@@ -280,12 +301,73 @@ export default function ChatPage() {
         <button
           type="button"
           className="btn-ghost btn-sm"
-          onClick={() => setShowThemes((v) => !v)}
+          onClick={() => {
+            setShowThemes((v) => !v);
+            setMenuOpen(false);
+          }}
           aria-expanded={showThemes}
         >
           Theme
         </button>
+        <button
+          type="button"
+          className="btn-ghost btn-sm"
+          onClick={() => {
+            setMenuOpen((v) => !v);
+            setShowThemes(false);
+          }}
+          aria-expanded={menuOpen}
+          aria-label="More"
+        >
+          ···
+        </button>
       </header>
+
+      {menuOpen && (
+        <div
+          style={{
+            padding: "10px 12px",
+            borderBottom: "1px solid rgba(255,255,255,0.08)",
+            display: "flex",
+            flexWrap: "wrap",
+            gap: 8,
+          }}
+        >
+          <button
+            type="button"
+            className="btn-ghost btn-sm"
+            onClick={() => {
+              setPinned(togglePin(peerId));
+            }}
+          >
+            {pinned ? "Unpin" : "Pin"}
+          </button>
+          <button
+            type="button"
+            className="btn-ghost btn-sm"
+            onClick={() => {
+              setMuted(toggleMute(peerId));
+            }}
+          >
+            {muted ? "Unmute" : "Mute"}
+          </button>
+          <button
+            type="button"
+            className="btn-ghost btn-sm"
+            onClick={() => {
+              setArchived(toggleArchive(peerId));
+            }}
+          >
+            {archived ? "Unarchive" : "Archive"}
+          </button>
+          <Link href={"/u/" + peerId} className="btn-ghost btn-sm">
+            Profile
+          </Link>
+          <Link href="/inbox" className="btn-ghost btn-sm">
+            Inbox
+          </Link>
+        </div>
+      )}
 
       {showThemes && (
         <div
@@ -319,7 +401,7 @@ export default function ChatPage() {
             </button>
           ))}
           <p style={{ fontSize: 11, opacity: 0.65, width: "100%", margin: 0 }}>
-            Themes are only on your device — the other person keeps their own look.
+            Themes stay on your device only.
           </p>
         </div>
       )}
@@ -333,7 +415,11 @@ export default function ChatPage() {
         />
       )}
 
-      <div style={{ flex: 1, overflowY: "auto", padding: "12px 14px 8px" }}>
+      <div
+        ref={listRef}
+        onScroll={onScrollList}
+        style={{ flex: 1, overflowY: "auto", padding: "12px 14px 8px", position: "relative" }}
+      >
         {!msgs.length && (
           <div style={{ textAlign: "center", marginTop: 48 }}>
             <Avatar profile={peer} size={72} />
@@ -362,6 +448,18 @@ export default function ChatPage() {
                 }}
               >
                 <div
+                  role="button"
+                  tabIndex={0}
+                  onDoubleClick={() => {
+                    if (m.content) {
+                      try {
+                        void navigator.clipboard.writeText(m.content);
+                      } catch {
+                        /* */
+                      }
+                    }
+                  }}
+                  title="Double-tap to copy"
                   style={{
                     maxWidth: "78%",
                     padding: "10px 12px",
@@ -392,6 +490,58 @@ export default function ChatPage() {
         <div ref={bottom} />
       </div>
 
+      {showJump && (
+        <button
+          type="button"
+          onClick={scrollEnd}
+          style={{
+            position: "absolute",
+            bottom: 88,
+            right: 16,
+            zIndex: 15,
+            borderRadius: 999,
+            padding: "8px 12px",
+            border: "none",
+            background: theme.mine,
+            color: theme.mineText,
+            fontWeight: 700,
+            fontSize: 12,
+            boxShadow: "0 4px 16px rgba(0,0,0,0.35)",
+          }}
+        >
+          ↓ Latest
+        </button>
+      )}
+
+      {showEmoji && (
+        <div
+          style={{
+            display: "flex",
+            gap: 6,
+            padding: "8px 12px",
+            overflowX: "auto",
+            borderTop: "1px solid rgba(255,255,255,0.08)",
+          }}
+        >
+          {QUICK_EMOJI.map((e) => (
+            <button
+              key={e}
+              type="button"
+              onClick={() => setText((t) => (t + e).slice(0, 2000))}
+              style={{
+                fontSize: 20,
+                background: "transparent",
+                border: "none",
+                cursor: "pointer",
+                padding: 4,
+              }}
+            >
+              {e}
+            </button>
+          ))}
+        </div>
+      )}
+
       <div
         style={{
           padding: "10px 12px calc(10px + env(safe-area-inset-bottom))",
@@ -402,6 +552,14 @@ export default function ChatPage() {
           background: theme.bg,
         }}
       >
+        <button
+          type="button"
+          className="btn-ghost btn-sm"
+          onClick={() => setShowEmoji((v) => !v)}
+          aria-label="Emoji"
+        >
+          ☺
+        </button>
         <textarea
           value={text}
           onChange={(e) => setText(e.target.value.slice(0, 2000))}
