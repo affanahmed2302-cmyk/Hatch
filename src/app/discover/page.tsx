@@ -4,6 +4,12 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { supabase, displayName, yearToLabel, rateLimit } from "@/lib/supabase";
 import { mutualCount, toggleSave, isSaved, haptic, playPing, bumpDaily } from "@/lib/obsession";
+import {
+  partitionConnections,
+  sendConnectionRequest,
+  acceptConnection,
+  rejectConnection,
+} from "@/lib/connections";
 import { getBlockedIds } from "@/lib/safety";
 import Nav from "@/components/Nav";
 
@@ -46,22 +52,7 @@ export default function DiscoverPage() {
       .neq("id", uid).limit(80);
     const filtered = (profs || []).filter(p => !blocked.has(p.id));
 
-    const { data: cons } = await supabase.from("connections")
-      .select("id, user_id, target_id, status")
-      .or(`user_id.eq.${uid},target_id.eq.${uid}`);
-
-    const connectedIds = new Set<string>();
-    const pendingIn: string[] = [];
-    const pendingOut = new Set<string>();
-
-    for (const c of cons || []) {
-      const peer = c.user_id === uid ? c.target_id : c.user_id;
-      if (c.status === "accepted") connectedIds.add(peer);
-      else if (c.status === "pending") {
-        if (c.target_id === uid) pendingIn.push(c.user_id);
-        else pendingOut.add(c.target_id);
-      }
-    }
+    const { accepted: connectedIds, pendingIn, pendingOut } = await partitionConnections(uid);
 
     const cards: Card[] = [];
     for (let i = 0; i < filtered.length; i++) {
@@ -94,34 +85,24 @@ export default function DiscoverPage() {
   async function connect(peerId: string) {
     if (!myId) return;
     if (!rateLimit("connect-" + peerId, 3000)) { setMsg("Wait a second…"); return; }
-    const { error } = await supabase.from("connections").insert({
-      user_id: myId, target_id: peerId, status: "pending",
-    });
-    if (error) {
-      if ((error.message || "").includes("duplicate") || error.code === "23505") setMsg("Already requested");
-      else setMsg(error.message);
-    } else {
-      setMsg("Request sent");
-      haptic(12); playPing();
-      await bumpDaily(myId, "connects");
-      await loadAll(myId);
-    }
+    const res = await sendConnectionRequest(myId, peerId);
+    if (!res.ok) { setMsg(res.error || "Could not send"); return; }
+    setMsg(res.status === "accepted" ? "Connected" : "Request sent");
+    haptic(12); playPing();
+    await bumpDaily(myId, "connects");
+    await loadAll(myId);
   }
 
   async function accept(peerId: string) {
     if (!myId) return;
-    const { error } = await supabase.from("connections")
-      .update({ status: "accepted" })
-      .eq("user_id", peerId).eq("target_id", myId).eq("status", "pending");
-    if (error) setMsg(error.message);
+    const res = await acceptConnection(myId, peerId);
+    if (!res.ok) setMsg(res.error || "Could not accept");
     else { setMsg("Connected!"); haptic([10, 30, 10]); await loadAll(myId); }
   }
 
   async function reject(peerId: string) {
     if (!myId) return;
-    await supabase.from("connections")
-      .update({ status: "rejected" })
-      .eq("user_id", peerId).eq("target_id", myId).eq("status", "pending");
+    await rejectConnection(myId, peerId);
     setMsg("Declined");
     await loadAll(myId);
   }
@@ -148,13 +129,9 @@ export default function DiscoverPage() {
       </div>
       <div className="page">
         <div className="hero-card" style={{ marginBottom: 14 }}>
-          <h1 className="h1" style={{ fontSize: 24, marginBottom: 6, position: "relative", zIndex: 1 }}>
-            Find people
-          </h1>
-          <p className="muted" style={{ fontSize: 13, position: "relative", zIndex: 1 }}>
-            Skills · teams · real campus connections
-          </p>
-          <div className="pill-row" style={{ position: "relative", zIndex: 1 }}>
+          <h1 className="h1" style={{ fontSize: 24, marginBottom: 6 }}>Find people</h1>
+          <p className="muted" style={{ fontSize: 13 }}>Skills · teams · real campus connections</p>
+          <div className="pill-row">
             <span className="pill hot">{visible.length} discover</span>
             <span className="pill">{matches.length} connected</span>
             {requests.length > 0 && <span className="pill">{requests.length} requests</span>}
@@ -187,19 +164,13 @@ export default function DiscoverPage() {
               ))}
             </div>
 
-            {visible.map((p, i) => (
-              <div key={p.id} className="card" style={{
-                marginBottom: 12,
-                border: "1px solid rgba(167,139,250,0.25)",
-                background: i % 2 === 0
-                  ? "linear-gradient(160deg, rgba(139,92,246,0.14), rgba(22,22,32,0.8))"
-                  : "linear-gradient(160deg, rgba(236,72,153,0.1), rgba(22,22,32,0.8))",
-              }}>
+            {visible.map((p) => (
+              <div key={p.id} className="card" style={{ marginBottom: 12 }}>
                 <Link href={"/u/" + p.id} style={{ display: "flex", gap: 12, alignItems: "center", textDecoration: "none", color: "inherit" }}>
                   <div style={{
                     width: 56, height: 56, borderRadius: "50%", flexShrink: 0,
-                    border: "2px solid rgba(167,139,250,0.35)",
-                    background: p.avatar_url ? `url(${p.avatar_url}) center/cover` : "var(--grad-cool)",
+                    border: "2px solid var(--border)",
+                    background: p.avatar_url ? `url(${p.avatar_url}) center/cover` : "var(--lime-soft)",
                   }} />
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <div className="row" style={{ gap: 6, flexWrap: "wrap" }}>
@@ -225,8 +196,8 @@ export default function DiscoverPage() {
                   </div>
                 )}
                 <div className="row" style={{ gap: 8, marginTop: 12, flexWrap: "wrap" }}>
-                  <button className="btn btn-sm" onClick={() => connect(p.id)}>Connect</button>
-                  <button className="btn-ghost btn-sm" onClick={() => save(p.id)}>{p.saved ? "Saved" : "Save"}</button>
+                  <button type="button" className="btn btn-sm" onClick={() => connect(p.id)}>Connect</button>
+                  <button type="button" className="btn-ghost btn-sm" onClick={() => save(p.id)}>{p.saved ? "Saved" : "Save"}</button>
                   <Link href={"/u/" + p.id} className="btn-ghost btn-sm">Profile</Link>
                   <Link href={"/chat/" + p.id} className="btn-ghost btn-sm">Message</Link>
                 </div>
@@ -242,33 +213,25 @@ export default function DiscoverPage() {
         )}
 
         {tab === "requests" && requests.map((p) => (
-          <div key={p.id} className="card" style={{
-            marginBottom: 10,
-            border: "1px solid rgba(251,191,36,0.3)",
-            background: "linear-gradient(160deg, rgba(251,191,36,0.1), rgba(22,22,32,0.85))",
-          }}>
+          <div key={p.id} className="card" style={{ marginBottom: 10 }}>
             <Link href={"/u/" + p.id} className="row" style={{ gap: 12, alignItems: "center", textDecoration: "none", color: "inherit" }}>
-              <div style={{ width: 48, height: 48, borderRadius: "50%", background: p.avatar_url ? `url(${p.avatar_url}) center/cover` : "var(--grad-cool)" }} />
+              <div style={{ width: 48, height: 48, borderRadius: "50%", background: p.avatar_url ? `url(${p.avatar_url}) center/cover` : "var(--lime-soft)" }} />
               <div style={{ flex: 1 }}>
                 <div style={{ fontWeight: 800, fontSize: 15 }}>{displayName(p)}</div>
                 <p className="muted" style={{ fontSize: 12 }}>Wants to connect</p>
               </div>
             </Link>
             <div className="row" style={{ gap: 8, marginTop: 10 }}>
-              <button className="btn btn-sm" onClick={() => accept(p.id)}>Accept</button>
-              <button className="btn-ghost btn-sm" onClick={() => reject(p.id)}>Decline</button>
+              <button type="button" className="btn btn-sm" onClick={() => accept(p.id)}>Accept</button>
+              <button type="button" className="btn-ghost btn-sm" onClick={() => reject(p.id)}>Decline</button>
             </div>
           </div>
         ))}
 
         {tab === "matches" && matches.map((p) => (
-          <div key={p.id} className="card row" style={{
-            marginBottom: 10, gap: 12, alignItems: "center",
-            border: "1px solid rgba(52,211,153,0.3)",
-            background: "linear-gradient(160deg, rgba(16,185,129,0.12), rgba(22,22,32,0.85))",
-          }}>
+          <div key={p.id} className="card row" style={{ marginBottom: 10, gap: 12, alignItems: "center" }}>
             <Link href={"/u/" + p.id} style={{ display: "flex", gap: 12, alignItems: "center", flex: 1, textDecoration: "none", color: "inherit" }}>
-              <div style={{ width: 48, height: 48, borderRadius: "50%", background: p.avatar_url ? `url(${p.avatar_url}) center/cover` : "var(--grad-cool)" }} />
+              <div style={{ width: 48, height: 48, borderRadius: "50%", background: p.avatar_url ? `url(${p.avatar_url}) center/cover` : "var(--lime-soft)" }} />
               <div style={{ fontWeight: 800, fontSize: 15 }}>{displayName(p)}</div>
             </Link>
             <Link href={"/chat/" + p.id} className="btn btn-sm">Message</Link>
