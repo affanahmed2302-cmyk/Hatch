@@ -2,10 +2,13 @@
 import { useEffect, useState, useRef, useCallback } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
-import { supabase, displayName, rateLimit } from "@/lib/supabase";
+import { supabase, displayName, rateLimit, isRecentlyOnline } from "@/lib/supabase";
 import { haptic, playPing, bumpChatStreak, markMessagesRead, bumpDaily } from "@/lib/obsession";
 import { soundSend } from "@/lib/uiSounds";
-import { isBlockedEitherWay, blockUser } from "@/lib/blocks";
+import { isBlockedEitherWay } from "@/lib/blocks";
+import { getChatTheme, setChatThemeId, CHAT_THEMES, type ChatThemeId } from "@/lib/chatTheme";
+import Avatar from "@/components/Avatar";
+import ChatBlockBar from "@/components/ChatBlockBar";
 
 type Msg = {
   id: string;
@@ -16,9 +19,20 @@ type Msg = {
   media_type?: string | null;
   created_at: string;
   _local?: boolean;
+  _failed?: boolean;
 };
 
-/** Fast DM — no Jitsi, no laggy call iframe. Message-first like IG. */
+function dayLabel(iso: string) {
+  const d = new Date(iso);
+  const today = new Date();
+  const yday = new Date();
+  yday.setDate(today.getDate() - 1);
+  if (d.toDateString() === today.toDateString()) return "Today";
+  if (d.toDateString() === yday.toDateString()) return "Yesterday";
+  return d.toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" });
+}
+
+/** Real DM screen — profiles + themes (personal, localStorage). */
 export default function ChatPage() {
   const { id: peerId } = useParams<{ id: string }>();
   const [myId, setMyId] = useState<string | null>(null);
@@ -28,8 +42,11 @@ export default function ChatPage() {
   const [loading, setLoading] = useState(true);
   const [blocked, setBlocked] = useState(false);
   const [sending, setSending] = useState(false);
+  const [themeId, setThemeId] = useState<ChatThemeId>("midnight");
+  const [showThemes, setShowThemes] = useState(false);
   const bottom = useRef<HTMLDivElement>(null);
   const router = useRouter();
+  const theme = CHAT_THEMES.find((t) => t.id === themeId) || getChatTheme();
 
   const scrollEnd = useCallback(() => {
     requestAnimationFrame(() => bottom.current?.scrollIntoView({ behavior: "smooth" }));
@@ -45,12 +62,19 @@ export default function ChatPage() {
         )
         .order("created_at", { ascending: false })
         .limit(80);
-      const list = ((data as Msg[]) || []).slice().reverse();
-      setMsgs(list);
+      setMsgs(((data as Msg[]) || []).slice().reverse());
       scrollEnd();
     },
     [peerId, scrollEnd]
   );
+
+  useEffect(() => {
+    try {
+      setThemeId(getChatTheme().id);
+    } catch {
+      /* */
+    }
+  }, []);
 
   useEffect(() => {
     let ch: ReturnType<typeof supabase.channel> | null = null;
@@ -89,7 +113,6 @@ export default function ChatPage() {
       markMessagesRead(user.id, peerId).catch(() => {});
       setLoading(false);
 
-      // Single lightweight realtime channel
       ch = supabase
         .channel("dm-" + [user.id, peerId].sort().join("-"))
         .on(
@@ -103,10 +126,7 @@ export default function ChatPage() {
           (payload) => {
             const m = payload.new as Msg;
             if (m.sender_id !== peerId) return;
-            setMsgs((prev) => {
-              if (prev.some((x) => x.id === m.id)) return prev;
-              return [...prev, m];
-            });
+            setMsgs((prev) => (prev.some((x) => x.id === m.id) ? prev : [...prev, m]));
             haptic(8);
             playPing();
             scrollEnd();
@@ -130,15 +150,17 @@ export default function ChatPage() {
     setText("");
     setSending(true);
     const tempId = "local-" + Date.now();
-    const optimistic: Msg = {
-      id: tempId,
-      sender_id: myId,
-      receiver_id: peerId,
-      content,
-      created_at: new Date().toISOString(),
-      _local: true,
-    };
-    setMsgs((prev) => [...prev, optimistic]);
+    setMsgs((prev) => [
+      ...prev,
+      {
+        id: tempId,
+        sender_id: myId,
+        receiver_id: peerId,
+        content,
+        created_at: new Date().toISOString(),
+        _local: true,
+      },
+    ]);
     scrollEnd();
     try {
       soundSend();
@@ -153,7 +175,9 @@ export default function ChatPage() {
       .single();
 
     if (error || !data) {
-      setMsgs((prev) => prev.filter((m) => m.id !== tempId));
+      setMsgs((prev) =>
+        prev.map((m) => (m.id === tempId ? { ...m, _failed: true, _local: false } : m))
+      );
       setText(content);
       setSending(false);
       return;
@@ -166,11 +190,12 @@ export default function ChatPage() {
   }
 
   const peerName = displayName(peer || {});
+  const online = isRecentlyOnline(peer?.last_seen);
 
   if (loading) {
     return (
       <div className="shell" style={{ display: "flex", alignItems: "center", justifyContent: "center" }}>
-        <span className="muted">…</span>
+        <span className="muted">Loading chat…</span>
       </div>
     );
   }
@@ -182,16 +207,40 @@ export default function ChatPage() {
           ← Inbox
         </Link>
         <p className="muted" style={{ marginTop: 24, textAlign: "center" }}>
-          This chat isn&apos;t available.
+          This chat isn't available.
         </p>
       </div>
     );
   }
 
+  let lastDay = "";
+
   return (
-    <div className="shell" style={{ display: "flex", flexDirection: "column", height: "100dvh" }}>
-      <div className="topbar" style={{ gap: 10 }}>
-        <Link href="/inbox" className="btn-ghost btn-sm" style={{ padding: "8px 10px" }}>
+    <div
+      style={{
+        display: "flex",
+        flexDirection: "column",
+        height: "100dvh",
+        maxWidth: "var(--max, 480px)",
+        margin: "0 auto",
+        background: theme.bg,
+        color: theme.theirsText,
+      }}
+    >
+      <header
+        style={{
+          display: "flex",
+          alignItems: "center",
+          gap: 10,
+          padding: "10px 12px",
+          borderBottom: "1px solid rgba(255,255,255,0.08)",
+          background: "color-mix(in srgb, " + theme.bg + " 94%, transparent)",
+          position: "sticky",
+          top: 0,
+          zIndex: 20,
+        }}
+      >
+        <Link href="/inbox" className="btn-ghost btn-sm" aria-label="Back">
           ←
         </Link>
         <Link
@@ -206,17 +255,7 @@ export default function ChatPage() {
             color: "inherit",
           }}
         >
-          <div
-            style={{
-              width: 40,
-              height: 40,
-              borderRadius: "50%",
-              flexShrink: 0,
-              background: peer?.avatar_url
-                ? `url(${peer.avatar_url}) center/cover`
-                : "linear-gradient(135deg,#8b5cf6,#ec4899)",
-            }}
-          />
+          <Avatar profile={peer} size={42} online={online} />
           <div style={{ minWidth: 0 }}>
             <div
               style={{
@@ -229,45 +268,124 @@ export default function ChatPage() {
             >
               {peerName}
             </div>
-            <div className="muted" style={{ fontSize: 11 }}>
-              {peer?.department || "Campus"}
-            </div>
-          </div>
-        </Link>
-        {myId && (
-          <button
-            type="button"
-            className="btn-ghost btn-sm"
-            style={{ fontSize: 11, color: "#fb7185" }}
-            onClick={async () => {
-              if (!confirm(`Block ${peerName}?`)) return;
-              await blockUser(myId, peerId);
-              setBlocked(true);
-            }}
-          >
-            Block
-          </button>
-        )}
-      </div>
-
-      <div style={{ flex: 1, overflowY: "auto", padding: "12px 14px", WebkitOverflowScrolling: "touch" }}>
-        {msgs.length === 0 && (
-          <div style={{ textAlign: "center", padding: "48px 16px" }}>
-            <div style={{ fontWeight: 800, fontSize: 17 }}>{peerName}</div>
-            <p className="muted" style={{ fontSize: 13, marginTop: 6 }}>
-              Say hi — keep it real
+            <p style={{ fontSize: 11, opacity: 0.7 }}>
+              {peer?.username
+                ? "@" + peer.username
+                : online
+                  ? "Active recently"
+                  : peer?.department || "Hatch student"}
             </p>
           </div>
+        </Link>
+        <button
+          type="button"
+          className="btn-ghost btn-sm"
+          onClick={() => setShowThemes((v) => !v)}
+          aria-expanded={showThemes}
+        >
+          Theme
+        </button>
+      </header>
+
+      {showThemes && (
+        <div
+          style={{
+            padding: "10px 12px",
+            borderBottom: "1px solid rgba(255,255,255,0.08)",
+            display: "flex",
+            flexWrap: "wrap",
+            gap: 8,
+          }}
+        >
+          {CHAT_THEMES.map((t) => (
+            <button
+              key={t.id}
+              type="button"
+              onClick={() => {
+                setChatThemeId(t.id);
+                setThemeId(t.id);
+              }}
+              style={{
+                fontSize: 11,
+                padding: "6px 10px",
+                borderRadius: 999,
+                border: themeId === t.id ? "2px solid " + t.mine : "1px solid rgba(255,255,255,0.15)",
+                background: t.bg,
+                color: t.theirsText,
+                cursor: "pointer",
+              }}
+            >
+              {t.name}
+            </button>
+          ))}
+          <p style={{ fontSize: 11, opacity: 0.65, width: "100%", margin: 0 }}>
+            Themes are only on your device — the other person keeps their own look.
+          </p>
+        </div>
+      )}
+
+      {myId && (
+        <ChatBlockBar
+          myId={myId}
+          peerId={peerId}
+          peerName={peerName}
+          onBlocked={() => setBlocked(true)}
+        />
+      )}
+
+      <div style={{ flex: 1, overflowY: "auto", padding: "12px 14px 8px" }}>
+        {!msgs.length && (
+          <div style={{ textAlign: "center", marginTop: 48 }}>
+            <Avatar profile={peer} size={72} />
+            <p style={{ fontWeight: 800, marginTop: 12, fontSize: 16 }}>{peerName}</p>
+            <p style={{ fontSize: 13, opacity: 0.65, marginTop: 4 }}>Say hi — keep it respectful.</p>
+          </div>
         )}
+
         {msgs.map((m) => {
           const mine = m.sender_id === myId;
+          const day = dayLabel(m.created_at);
+          const showDay = day !== lastDay;
+          if (showDay) lastDay = day;
           return (
-            <div
-              key={m.id}
-              className={mine ? "bubble-me" : "bubble-them"}
-              style={{ marginBottom: 6, opacity: m._local ? 0.7 : 1 }}
-            >
-              <span style={{ whiteSpace: "pre-wrap" }}>{m.content}</span>
+            <div key={m.id}>
+              {showDay && (
+                <p style={{ textAlign: "center", fontSize: 11, opacity: 0.55, margin: "14px 0 10px" }}>
+                  {day}
+                </p>
+              )}
+              <div
+                style={{
+                  display: "flex",
+                  justifyContent: mine ? "flex-end" : "flex-start",
+                  marginBottom: 6,
+                }}
+              >
+                <div
+                  style={{
+                    maxWidth: "78%",
+                    padding: "10px 12px",
+                    borderRadius: mine ? "16px 16px 4px 16px" : "16px 16px 16px 4px",
+                    background: mine ? theme.mine : theme.theirs,
+                    color: mine ? theme.mineText : theme.theirsText,
+                    opacity: m._local ? 0.75 : 1,
+                    border: m._failed ? "1px solid #f87171" : "none",
+                    fontSize: 14,
+                    lineHeight: 1.4,
+                    wordBreak: "break-word",
+                  }}
+                >
+                  {m.content}
+                  <div style={{ fontSize: 10, marginTop: 4, opacity: 0.7, textAlign: "right" }}>
+                    {m._failed
+                      ? "Failed — edit & resend"
+                      : new Date(m.created_at).toLocaleTimeString("en-IN", {
+                          hour: "2-digit",
+                          minute: "2-digit",
+                        })}
+                  </div>
+                </div>
+              </div>
             </div>
           );
         })}
@@ -280,36 +398,42 @@ export default function ChatPage() {
           borderTop: "1px solid rgba(255,255,255,0.08)",
           display: "flex",
           gap: 8,
-          alignItems: "center",
-          background: "rgba(7,7,12,0.95)",
+          alignItems: "flex-end",
+          background: theme.bg,
         }}
       >
-        <input
+        <textarea
           value={text}
-          onChange={(e) => setText(e.target.value)}
-          placeholder="Message"
-          style={{
-            flex: 1,
-            borderRadius: 22,
-            padding: "12px 16px",
-            background: "rgba(255,255,255,0.06)",
-            border: "1px solid rgba(255,255,255,0.08)",
-          }}
+          onChange={(e) => setText(e.target.value.slice(0, 2000))}
           onKeyDown={(e) => {
             if (e.key === "Enter" && !e.shiftKey) {
               e.preventDefault();
               void send();
             }
           }}
+          placeholder="Message…"
+          rows={1}
+          aria-label="Message"
+          style={{
+            flex: 1,
+            resize: "none",
+            maxHeight: 120,
+            borderRadius: 16,
+            padding: "10px 12px",
+            border: "1px solid rgba(255,255,255,0.12)",
+            background: "rgba(0,0,0,0.25)",
+            color: theme.theirsText,
+            font: "inherit",
+          }}
         />
         <button
+          type="button"
           className="btn btn-sm"
-          style={{ borderRadius: "50%", width: 44, height: 44, padding: 0 }}
-          onClick={() => void send()}
           disabled={!text.trim() || sending}
-          aria-label="Send"
+          onClick={() => void send()}
+          style={{ background: theme.mine, color: theme.mineText, border: "none" }}
         >
-          ↑
+          Send
         </button>
       </div>
     </div>
