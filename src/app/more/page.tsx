@@ -21,6 +21,7 @@ const LINKS: LinkItem[] = [
   { href: "/notes", title: "Notes", sub: "Shared resources when available", group: "Tools" },
   { href: "/opportunities", title: "Opportunities", sub: "Internships · openings", group: "Tools" },
   { href: "/teams", title: "Find a team", sub: "Hackathons · projects", group: "Tools" },
+  { href: "/match", title: "Skill match", sub: "Who fits your skills", group: "Tools" },
   { href: "/leaderboard", title: "Leaderboard", sub: "Campus reputation signals", group: "Tools" },
   { href: "/safety", title: "Safety", sub: "Report · block · guidelines", group: "Trust" },
   { href: "/install", title: "Install app", sub: "Add Hatch to your home screen", group: "Trust" },
