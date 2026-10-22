@@ -44,11 +44,11 @@ export const viewport: Viewport = {
   ],
   width: "device-width",
   initialScale: 1,
-  // Allow zoom for accessibility (WCAG) — do not lock maximumScale
+  // Allow zoom for accessibility (WCAG)
   viewportFit: "cover",
 };
 
-/** Before paint: recovery + hide splash if already shown this session (stops double HATCH flash) */
+/** Before paint: recovery + hide splash if already shown this session */
 const BOOT_SCRIPT = `
 (function () {
   try {
@@ -75,26 +75,43 @@ const BOOT_SCRIPT = `
       Promise.all(tasks).then(done).catch(done);
       return;
     }
-    try {
-      if (sessionStorage.getItem("hatch_splash_done") === "1") {
-        document.documentElement.classList.add("hatch-splash-skip");
-      }
-    } catch (e) {}
+    var seen = false;
+    try { seen = sessionStorage.getItem("hatch_splash_v11") === "1"; } catch (e) {}
+    if (seen) {
+      document.documentElement.classList.add("hatch-booted");
+    }
   } catch (e) {}
 })();
 `;
 
-export default function RootLayout({
-  children,
-}: {
-  children: React.ReactNode;
-}) {
+export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en" suppressHydrationWarning>
+    <html lang="en">
       <head>
+        <link rel="apple-touch-icon" href="/icon.svg?v=energy-h-v11" />
+        <link rel="icon" href="/icon.svg?v=energy-h-v11" type="image/svg+xml" />
+        <meta name="apple-mobile-web-app-capable" content="yes" />
+        <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+        <meta name="apple-mobile-web-app-title" content="Hatch" />
+        <meta name="mobile-web-app-capable" content="yes" />
         <script dangerouslySetInnerHTML={{ __html: BOOT_SCRIPT }} />
+        <style
+          dangerouslySetInnerHTML={{
+            __html: `
+#hatch-boot{position:fixed;inset:0;z-index:99999;display:flex;flex-direction:column;align-items:center;justify-content:center;background:#10110f;color:#f4f4f8;font-family:-apple-system,BlinkMacSystemFont,"SF Pro Display","Segoe UI",Roboto,sans-serif}
+html.hatch-booted #hatch-boot{display:none!important;pointer-events:none!important}
+#hatch-boot.hatch-boot-done,#hatch-boot.hatch-boot-out{opacity:0;pointer-events:none;transition:opacity .2s ease}
+#hatch-boot .hatch-boot-mark{font-weight:900;font-size:clamp(40px,12vw,64px);letter-spacing:.08em;line-height:1;color:#c7f36b}
+#hatch-boot .hatch-boot-sub{margin-top:12px;font-size:11px;font-weight:600;letter-spacing:.16em;text-transform:uppercase;color:#a6aaa1;opacity:.9}
+`,
+          }}
+        />
       </head>
       <body>
+        <div id="hatch-boot" aria-hidden="true">
+          <div className="hatch-boot-mark">HATCH</div>
+          <div className="hatch-boot-sub">Campus network</div>
+        </div>
         <Providers>{children}</Providers>
       </body>
     </html>
