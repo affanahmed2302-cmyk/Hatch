@@ -6,6 +6,7 @@ import { supabase, displayName, isRecentlyOnline, touchPresence } from "@/lib/su
 import { hasChatLock, isChatUnlocked, unlockChat, isChatLocked } from "@/lib/chatLock";
 import { getPinned } from "@/lib/pins";
 import { getIsolationSet } from "@/lib/blocks";
+import Avatar from "@/components/Avatar";
 import Nav from "@/components/Nav";
 
 type Thread = { peerId: string; profile: any; last: any; locked: boolean; unread: number; pinned: boolean };
@@ -23,13 +24,8 @@ export default function InboxPage() {
 
   useEffect(() => {
     (async () => {
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
-      if (!user) {
-        router.push("/login");
-        return;
-      }
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) { router.push("/login"); return; }
       setMyId(user.id);
       touchPresence(user.id);
       if (hasChatLock() && !isChatUnlocked()) {
@@ -96,10 +92,7 @@ export default function InboxPage() {
         unread: unreadMap.get(id) || 0,
         pinned: pinnedSet.has(id),
       }));
-      list.sort((a, b) => {
-        if (a.pinned !== b.pinned) return a.pinned ? -1 : 1;
-        return 0;
-      });
+      list.sort((a, b) => (a.pinned !== b.pinned ? (a.pinned ? -1 : 1) : 0));
       setThreads(list);
     } catch {
       setThreads([]);
@@ -126,21 +119,10 @@ export default function InboxPage() {
   if (needPin) {
     return (
       <div className="shell" style={{ padding: 24, display: "flex", flexDirection: "column", justifyContent: "center", minHeight: "100dvh" }}>
-        <h1 className="h1" style={{ marginBottom: 8, textAlign: "center" }}>
-          Locked inbox
-        </h1>
+        <h1 className="h1" style={{ marginBottom: 8, textAlign: "center" }}>Locked inbox</h1>
         {pinErr && <div className="fail">{pinErr}</div>}
-        <input
-          type="password"
-          inputMode="numeric"
-          placeholder="PIN"
-          value={pin}
-          onChange={(e) => setPin(e.target.value)}
-          style={{ marginBottom: 12, textAlign: "center", fontSize: 22, letterSpacing: 8 }}
-        />
-        <button className="btn" onClick={tryUnlock} disabled={pin.length < 4}>
-          Unlock
-        </button>
+        <input type="password" inputMode="numeric" placeholder="PIN" value={pin} onChange={(e) => setPin(e.target.value)} style={{ marginBottom: 12, textAlign: "center", fontSize: 22, letterSpacing: 8 }} />
+        <button className="btn" onClick={tryUnlock} disabled={pin.length < 4}>Unlock</button>
       </div>
     );
   }
@@ -164,135 +146,67 @@ export default function InboxPage() {
   return (
     <div className="shell">
       <div className="topbar">
-        <div className="logo">HATCH</div>
-        <Link href="/discover" className="btn-ghost btn-sm">
-          + New
-        </Link>
+        <div className="logo">Chats</div>
+        <Link href="/discover" className="btn-ghost btn-sm">+ New</Link>
       </div>
 
       <div className="page">
-        <h1 className="h1" style={{ marginBottom: 12, fontSize: 22 }}>
-          Chats
-        </h1>
-        <input
-          value={q}
-          onChange={(e) => setQ(e.target.value)}
-          placeholder="Search"
-          style={{
-            marginBottom: 14,
-            borderRadius: 16,
-            background: "rgba(255,255,255,0.06)",
-            border: "1px solid rgba(255,255,255,0.08)",
-          }}
-        />
+        <h1 className="h1" style={{ marginBottom: 8, fontSize: 22 }}>Chats</h1>
+        <p className="muted" style={{ fontSize: 12, marginBottom: 12 }}>
+          Names from profiles · <Link href="/match">Skill match</Link>
+        </p>
+        <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search" style={{ marginBottom: 14, borderRadius: 16 }} aria-label="Search chats" />
 
         {lockOn && locked.length > 0 && (
           <div className="card" style={{ marginBottom: 12, cursor: "pointer" }} onClick={() => setFolderOpen(!folderOpen)}>
             <div className="row" style={{ justifyContent: "space-between" }}>
-              <div style={{ fontWeight: 700 }}>🔒 Locked · {locked.length}</div>
+              <div style={{ fontWeight: 700 }}>Locked · {locked.length}</div>
               <span className="badge">{folderOpen ? "Hide" : "Open"}</span>
             </div>
           </div>
         )}
 
-        {folderOpen &&
-          locked.map((t) => (
-            <Link
-              key={t.peerId}
-              href={"/chat/" + t.peerId}
-              className="card row"
-              style={{ display: "flex", marginBottom: 8, gap: 12, alignItems: "center" }}
-            >
-              <div
-                style={{
-                  width: 48,
-                  height: 48,
-                  borderRadius: "50%",
-                  background: t.profile?.avatar_url
-                    ? "url(" + t.profile.avatar_url + ") center/cover"
-                    : "var(--grad-cool)",
-                }}
-              />
-              <div style={{ flex: 1 }}>
-                <div style={{ fontWeight: 700 }}>{displayName(t.profile)}</div>
-                <p className="muted" style={{ fontSize: 12 }}>
-                  {t.last?.content?.slice(0, 40) || "Locked"}
-                </p>
-              </div>
-            </Link>
-          ))}
+        {folderOpen && locked.map((t) => (
+          <Link key={t.peerId} href={"/chat/" + t.peerId} className="card row" style={{ display: "flex", marginBottom: 8, gap: 12, alignItems: "center" }}>
+            <Avatar profile={t.profile} size={48} />
+            <div style={{ flex: 1 }}>
+              <div style={{ fontWeight: 700 }}>{displayName(t.profile)}</div>
+              <p className="muted" style={{ fontSize: 12 }}>{t.last?.content?.slice(0, 40) || "Locked"}</p>
+            </div>
+          </Link>
+        ))}
 
         {list.map((t) => {
           const isOn = isRecentlyOnline(t.profile?.last_seen);
           return (
-            <Link
-              key={t.peerId}
-              href={"/chat/" + t.peerId}
-              className="card row"
-              style={{
-                display: "flex",
-                marginBottom: 10,
-                gap: 12,
-                alignItems: "center",
-                background: t.unread
-                  ? "linear-gradient(90deg,rgba(124,58,237,0.18),rgba(236,72,153,0.08))"
-                  : "rgba(255,255,255,0.04)",
-              }}
-            >
-              <div style={{ position: "relative", flexShrink: 0 }}>
-                <div
-                  style={{
-                    width: 52,
-                    height: 52,
-                    borderRadius: "50%",
-                    background: t.profile?.avatar_url
-                      ? "url(" + t.profile.avatar_url + ") center/cover"
-                      : "var(--grad-cool)",
-                    boxShadow: isOn ? "0 0 0 2px #34d399" : undefined,
-                  }}
-                />
-              </div>
+            <Link key={t.peerId} href={"/chat/" + t.peerId} className="card row" style={{
+              display: "flex", marginBottom: 10, gap: 12, alignItems: "center",
+              background: t.unread ? "var(--lime-soft)" : undefined,
+              borderColor: t.unread ? "rgba(199,243,107,0.35)" : undefined,
+            }}>
+              <Avatar profile={t.profile} size={52} online={isOn} />
               <div style={{ flex: 1, minWidth: 0 }}>
                 <div className="row" style={{ justifyContent: "space-between" }}>
-                  <div style={{ fontWeight: t.unread ? 800 : 600, fontSize: 15 }}>
-                    {t.pinned ? "📌 " : ""}
-                    {displayName(t.profile)}
+                  <div style={{ minWidth: 0 }}>
+                    <div style={{ fontWeight: t.unread ? 800 : 600, fontSize: 15, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                      {t.pinned ? "📌 " : ""}{displayName(t.profile)}
+                    </div>
+                    {t.profile?.username && (
+                      <p className="muted" style={{ fontSize: 11 }}>@{t.profile.username}</p>
+                    )}
                   </div>
-                  <span className="muted" style={{ fontSize: 11 }}>
-                    {timeAgo(t.last?.created_at)}
-                  </span>
+                  <span className="muted" style={{ fontSize: 11 }}>{timeAgo(t.last?.created_at)}</span>
                 </div>
                 <div className="row" style={{ justifyContent: "space-between", marginTop: 2 }}>
-                  <p
-                    className="muted"
-                    style={{
-                      fontSize: 13,
-                      overflow: "hidden",
-                      textOverflow: "ellipsis",
-                      whiteSpace: "nowrap",
-                      fontWeight: t.unread ? 600 : 400,
-                    }}
-                  >
+                  <p className="muted" style={{ fontSize: 13, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", fontWeight: t.unread ? 600 : 400 }}>
                     {t.last?.content || "Say hi"}
                   </p>
                   {t.unread > 0 && (
-                    <span
-                      style={{
-                        minWidth: 20,
-                        height: 20,
-                        borderRadius: 10,
-                        padding: "0 6px",
-                        background: "linear-gradient(135deg,#8b5cf6,#ec4899)",
-                        color: "#fff",
-                        fontSize: 11,
-                        fontWeight: 800,
-                        display: "flex",
-                        alignItems: "center",
-                        justifyContent: "center",
-                      }}
-                    >
-                      {t.unread > 9 ? "9+" : t.unread}
-                    </span>
+                    <span style={{
+                      minWidth: 20, height: 20, borderRadius: 10, padding: "0 6px",
+                      background: "var(--lime)", color: "#10110f", fontSize: 11, fontWeight: 800,
+                      display: "flex", alignItems: "center", justifyContent: "center",
+                    }}>{t.unread > 9 ? "9+" : t.unread}</span>
                   )}
                 </div>
               </div>
@@ -303,12 +217,10 @@ export default function InboxPage() {
         {threads.length === 0 && (
           <div className="empty" style={{ padding: "40px 16px" }}>
             <p style={{ fontWeight: 700 }}>No chats yet</p>
-            <p className="muted" style={{ fontSize: 13, margin: "8px 0 16px" }}>
-              Find someone free or on People
-            </p>
-            <Link href="/home" className="btn btn-sm">
-              I&apos;m Free
-            </Link>
+            <p className="muted" style={{ fontSize: 13, margin: "8px 0 16px" }}>Find people on Discover or Match</p>
+            <Link href="/discover" className="btn btn-sm">Discover</Link>
+            {" "}
+            <Link href="/match" className="btn-ghost btn-sm">Skill match</Link>
           </div>
         )}
       </div>
